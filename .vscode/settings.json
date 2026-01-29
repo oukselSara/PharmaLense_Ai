@@ -1,0 +1,7 @@
+{
+    "python.analysis.extraPaths": [
+        "./label_detection",
+        "./text_extraction"
+    ],
+    "python-envs.pythonProjects": []
+}
