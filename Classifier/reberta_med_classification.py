@@ -3,12 +3,29 @@ import json
 from typing import Dict, List
 from datetime import datetime
 import os
+from pathlib import Path
 
 class ClassificateurMedicamentsAlgerien:
     """Classificateur robuste pour OCR pharmaceutique algérien - gère n'importe quel ordre de texte et formats multi-lignes"""
     
-    def __init__(self):
+    def __init__(self, results_dir: str = "results"):
+        """
+        Initialize the classifier with a results directory
+        
+        Args:
+            results_dir: Directory where results will be saved (default: "results")
+        """
         print("🇩🇿 Classificateur Algérien initialisé\n")
+        
+        # Create results directory
+        self.results_dir = Path(results_dir)
+        self.results_dir.mkdir(exist_ok=True)
+        
+        # Create subdirectories for different types of outputs
+        (self.results_dir / "json").mkdir(exist_ok=True)
+        (self.results_dir / "text").mkdir(exist_ok=True)
+        
+        print(f"📁 Dossier de résultats créé: {self.results_dir.absolute()}\n")
         
         # Entreprises algériennes connues
         self.entreprises_algeriennes = {
@@ -330,8 +347,22 @@ class ClassificateurMedicamentsAlgerien:
         
         return sortie
     
-    def enregistrer_dans_fichier(self, entites: dict, nom_fichier: str = "medicaments.json"):
-        """Enregistrer les entités dans un fichier JSON - ajoute les données existantes"""
+    def enregistrer_dans_fichier(self, entites: dict, nom_fichier: str = None, save_text: bool = True):
+        """
+        Enregistrer les entités dans un fichier JSON et/ou texte dans le dossier results
+        
+        Args:
+            entites: Données extraites
+            nom_fichier: Nom de base du fichier (sans extension). Si None, utilise timestamp
+            save_text: Si True, sauvegarde également au format texte
+        """
+        
+        # Générer un nom de fichier basé sur le timestamp si non fourni
+        if nom_fichier is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nom_medicament = entites.get('nom_medicament', ['inconnu'])[0] if entites.get('nom_medicament') else 'inconnu'
+            nom_medicament = re.sub(r'[^\w\s-]', '', nom_medicament).replace(' ', '_')
+            nom_fichier = f"{nom_medicament}_{timestamp}"
         
         # Ajouter un horodatage à l'entrée
         entree = {
@@ -339,28 +370,69 @@ class ClassificateurMedicamentsAlgerien:
             'donnees': entites
         }
         
+        # ========== SAUVEGARDER JSON ==========
+        json_path = self.results_dir / "json" / f"{nom_fichier}.json"
+        
         # Charger les données existantes si le fichier existe
         donnees_existantes = []
-        if os.path.exists(nom_fichier):
+        if json_path.exists():
             try:
-                with open(nom_fichier, 'r', encoding='utf-8') as f:
+                with open(json_path, 'r', encoding='utf-8') as f:
                     donnees_existantes = json.load(f)
-                    # S'assurer que c'est une liste
                     if not isinstance(donnees_existantes, list):
                         donnees_existantes = [donnees_existantes]
             except json.JSONDecodeError:
-                print(f"   ⚠️  Fichier corrompu, création d'un nouveau")
+                print(f"   ⚠️  Fichier JSON corrompu, création d'un nouveau")
                 donnees_existantes = []
         
         # Ajouter la nouvelle entrée
         donnees_existantes.append(entree)
         
-        # Enregistrer dans le fichier
+        # Enregistrer le fichier JSON
         try:
-            with open(nom_fichier, 'w', encoding='utf-8') as f:
+            with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(donnees_existantes, f, indent=2, ensure_ascii=False)
-            print(f"   ✅ Enregistré: {nom_fichier}")
-            print(f"   📊 Nombre total d'entrées: {len(donnees_existantes)}\n")
+            print(f"   ✅ JSON enregistré: {json_path}")
+            print(f"   📊 Nombre total d'entrées: {len(donnees_existantes)}")
+        except Exception as e:
+            print(f"   ❌ Erreur JSON: {e}")
+            return False
+        
+        # ========== SAUVEGARDER TEXTE ==========
+        if save_text:
+            text_path = self.results_dir / "text" / f"{nom_fichier}.txt"
+            try:
+                with open(text_path, 'w', encoding='utf-8') as f:
+                    f.write(self.formater_sortie(entites))
+                print(f"   ✅ Texte enregistré: {text_path}")
+            except Exception as e:
+                print(f"   ❌ Erreur Texte: {e}")
+        
+        print()
+        return True
+    
+    def enregistrer_batch(self, liste_entites: List[dict], nom_fichier: str = "batch_results"):
+        """
+        Enregistrer plusieurs résultats en un seul fichier
+        
+        Args:
+            liste_entites: Liste de dictionnaires d'entités
+            nom_fichier: Nom du fichier de sortie
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        json_path = self.results_dir / "json" / f"{nom_fichier}_{timestamp}.json"
+        
+        batch_data = {
+            'horodatage': datetime.now().isoformat(),
+            'nombre_medicaments': len(liste_entites),
+            'medicaments': liste_entites
+        }
+        
+        try:
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(batch_data, f, indent=2, ensure_ascii=False)
+            print(f"   ✅ Batch JSON enregistré: {json_path}")
+            print(f"   📊 Nombre de médicaments: {len(liste_entites)}\n")
             return True
         except Exception as e:
             print(f"   ❌ Erreur: {e}\n")
@@ -376,22 +448,45 @@ def principale():
     
     classificateur = ClassificateurMedicamentsAlgerien()
     
-    # Cas de test complets
-    cas_tests = [
-        # ============ TESTS FORMAT MULTI-LIGNE ============
-        {
-            "nom": "TEST 1: Format Multi-ligne - PARACETAMOL",
-            "texte": """LOT 77A  
+    # Mode interactif principal
+    print("\n" + "="*70)
+    print("💬 MODE INTERACTIF")
+    print("="*70)
+    
+    print("\nOptions:")
+    print("  1. Tester avec des exemples automatiques")
+    print("  2. Analyser du texte OCR personnalisé")
+    print("  3. Quitter")
+    
+    while True:
+        print("\n" + "─"*70)
+        choice = input("\n➤ Votre choix (1/2/3): ").strip()
+        
+        if choice == '3':
+            print("\n👋 Au revoir!")
+            break
+        
+        elif choice == '1':
+            # Run automatic tests
+            print("\n" + "="*70)
+            print("🧪 TESTS AUTOMATIQUES")
+            print("="*70)
+            
+            # Cas de test complets
+            cas_tests = [
+                {
+                    "nom": "TEST 1: Format Multi-ligne - PARACETAMOL",
+                    "texte": """LOT 77A  
 BIOCARE  
 500 mg PARACETAMOL  
 EXP 04-2026  
 Comprimés  
 FAB 02-2024  
 TR: 62.5DA"""
-        },
-        {
-            "nom": "TEST 2: Format Multi-ligne - CLOFENAL LP",
-            "texte": """75mg – diclofénac sodique  
+                },
+                {
+                    "nom": "TEST 2: Format Multi-ligne - CLOFENAL LP",
+                    "texte": """75mg – diclofénac sodique  
 EXP:11-25  
 VIGNETTE SAIDAL  
 B/20 gélules LP  
@@ -399,142 +494,100 @@ CLOFENAL LP
 LOT 605  
 FAB 10-24  
 PPA 366.60DA"""
-        },
-        
-        # ============ TESTS FORMAT UNE SEULE LIGNE ============
-        {
-            "nom": "TEST 3: Une seule ligne - BIOFENAC (Mélangé)",
-            "texte": "Biopharm-BIOFENAC 100mg - Diclofénac Sodique - Suppositoires/B10 - TR=87.80DA - PPA+SHP=107.40+1.50 - 108.90DA - LOT: 77/23 - FAB: 12/26 - PER: 11/05/04 B - DE:16.05/04 B - 0409/2063"
-        },
-        {
-            "nom": "TEST 4: Une seule ligne - CLOFENAL L.P",
-            "texte": "VIGNETTE-SAIDAL CLOFENAL & L.P 75 mg - Diclofénac sodique - Boîte de 30 Gélules L.P - PRIX: 365.10 + SHP: 1.5 - PPA: 366.60 DA - T.R: 366.60 DA - DE: 18/07/04B 037/003 - LOT: 605 - FAB: 10/2024 - EXP: 11/2024"
-        },
-        {
-            "nom": "TEST 5: Une seule ligne - PREDNICORT",
-            "texte": "Nadpharmagic-Vignette- PREDNICORT 20 mg - prednisolone - comprimé quadrispersible B/20 - Prix: 389.5 + SHP 2.50 - PPA=392.00 DA - TR: 392.00 DA - D.E n° 15/09H 144/468 - Date Exp: 12/2024 - Date Fab: 12/2024 - Lot n°: F10 0162"
-        },
-        {
-            "nom": "TEST 6: Une seule ligne - EXPANDOL",
-            "texte": "VIGNETTE BIOGALENIC EXPANDOL 500mg - Paracétamol - Comprimée boîte de 20 - Prix+SHP=98.19+0.00 - PPA=98.19 DA - Tarif de Réf = 50.00 DA - LOT: 235 - PERIODO: 06/2026 - FABRICATO B: 06/2025 - DE:24004 B 003235"
-        },
-        {
-            "nom": "TEST 7: Une seule ligne - STERDEX",
-            "texte": "STERDEX 0.267mg/1.336mg - Dexaméthasone - Oxytétracycline - Pde Opht B/12 - récipients unidoses - PPA=256.73+2.50 - 258.23 DA - LOT: 3030 - FAB: 10/2022 - PER: 130/022 - DE: 117/022 - T/D"
-        },
-        
-        # ============ CAS LIMITES ============
-        {
-            "nom": "TEST 8: Dosage avant nom du médicament",
-            "texte": """500mg ASPIRIN
-BIOCARE
-LOT: ABC123
-FAB: 01-2024
-EXP: 01-2026
-TR: 45.00DA"""
-        },
-        {
-            "nom": "TEST 9: Format mixte avec LP",
-            "texte": "SAIDAL VOLTAREN L.P 100mg - diclofénac sodique - gélules B/30 - PPA 425.00 DA - LOT: X789 - FAB: 03/2024 - EXP: 03/2026"
-        },
-        {
-            "nom": "TEST 10: Information minimale",
-            "texte": "AMOXICILLIN 500mg Comprimés LOT: 12345 EXP: 12-2025"
-        },
-        
-        # ============ FORMAT COMPLÈTEMENT MÉLANGÉ ============
-        {
-            "nom": "TEST 11: Complètement mélangé - CLAMOXYL",
-            "texte": "EXP 03/2027 - 1g AMOXICILLINE - B/12 gélules - LOT 77C - FAB 04/2024 - BIOPHARM - PRIX 340DA - CLAMOXYL"
-        },
-        {
-            "nom": "TEST 12: Ordre aléatoire - DOLIPRANE",
-            "texte": "LOT X999 - PRIX 125.50DA - SANOFI - 500mg PARACETAMOL - EXP 12/2026 - FAB 01/2025 - DOLIPRANE - Comprimés B/20"
-        },
-        
-        # ============ VARIATIONS DE FORMAT DE PRIX ============
-        {
-            "nom": "TEST 13: Prix sans séparateur - CETIRIZINE",
-            "texte": "SAIDAL - 10mg CETIRIZINE - FAB 08/23 - TR 115DA - B/20 comprimés - EXP 08/26 - LOT A55 - VIGNETTE"
-        }
-    ]
-    
-    # Exécuter les tests
-    print("\n" + "="*70)
-    print("🧪 TESTS AUTOMATIQUES")
-    print("="*70)
-    
-    for i, test in enumerate(cas_tests, 1):
-        print(f"\n{'─'*70}")
-        print(f"{test['nom']}")
-        print('─'*70)
-        print(f"📝 Entrée:\n{test['texte']}\n")
-        
-        entites = classificateur.predire(test['texte'])
-        print(classificateur.formater_sortie(entites))
-    
-    # Mode interactif
-    print("\n" + "="*70)
-    print("💬 MODE INTERACTIF")
-    print("="*70)
-    print("\n📋 Collez votre texte OCR de médicament algérien")
-    print("   (Format multi-lignes supporté)")
-    print("\n💡 Le classificateur est maintenant robuste:")
-    print("   ✓ Format multi-lignes et une seule ligne")
-    print("   ✓ Ordre des éléments flexible")
-    print("   ✓ Formats multiples supportés")
-    print("   ✓ Extraction intelligente")
-    print("   ✓ Sauvegarde cumulative (les résultats s'ajoutent)")
-    print("\n⌨️  Collez votre texte et appuyez sur ENTRÉE 2 fois (ligne vide) pour terminer")
-    print("⌨️  Tapez 'quit' ou 'q' pour quitter\n")
-    
-    while True:
-        print("─"*70)
-        print("\n➤ Texte:\n")
-        
-        lignes = []
-        compte_ligne_vide = 0
-        
-        while True:
-            try:
-                ligne = input()
-            except EOFError:
-                break
+                },
+                {
+                    "nom": "TEST 3: Une seule ligne - BIOFENAC",
+                    "texte": "Biopharm-BIOFENAC 100mg - Diclofénac Sodique - Suppositoires/B10 - TR=87.80DA - LOT: 77/23 - FAB: 12/26 - PER: 11/05/04"
+                },
+                {
+                    "nom": "TEST 4: Une seule ligne - CLOFENAL L.P",
+                    "texte": "VIGNETTE-SAIDAL CLOFENAL & L.P 75 mg - Diclofénac sodique - Boîte de 30 Gélules L.P - PRIX: 365.10 - LOT: 605 - FAB: 10/2024 - EXP: 11/2024"
+                },
+            ]
             
-            # Vérifier les commandes de quitter
-            if ligne.strip().lower() in ['quit', 'exit', 'q'] and len(lignes) == 0:
-                print("\n👋 Au revoir!")
-                return
+            resultats_batch = []
             
-            # Si la ligne est vide, incrémenter le compteur
-            if not ligne.strip():
-                compte_ligne_vide += 1
-                # Si deux lignes vides consécutives
-                if compte_ligne_vide >= 1 and len(lignes) > 0:
-                    break
-            else:
+            for i, test in enumerate(cas_tests, 1):
+                print(f"\n{'─'*70}")
+                print(f"{test['nom']}")
+                print('─'*70)
+                print(f"📝 Entrée:\n{test['texte']}\n")
+                
+                entites = classificateur.predire(test['texte'])
+                print(classificateur.formater_sortie(entites))
+                
+                resultats_batch.append(entites)
+                
+                # Sauvegarder individuellement
+                classificateur.enregistrer_dans_fichier(entites)
+            
+            # Sauvegarder tous les résultats en batch
+            classificateur.enregistrer_batch(resultats_batch, "tests_automatiques")
+            
+        elif choice == '2':
+            # Custom text analysis
+            print("\n" + "="*70)
+            print("📝 ANALYSE DE TEXTE PERSONNALISÉ")
+            print("="*70)
+            print("\n📋 Collez votre texte OCR de médicament algérien")
+            print("   (Format multi-lignes supporté)")
+            print("\n💡 Fonctionnalités:")
+            print("   ✓ Format multi-lignes et une seule ligne")
+            print("   ✓ Ordre des éléments flexible")
+            print("   ✓ Extraction intelligente")
+            print("   ✓ Sauvegarde automatique dans ./results/")
+            print("\n⌨️  Collez votre texte et appuyez sur ENTRÉE 2 fois (ligne vide) pour terminer")
+            print("⌨️  Tapez 'retour' pour revenir au menu principal\n")
+            
+            while True:
+                print("─"*70)
+                print("\n➤ Texte:\n")
+                
+                lignes = []
                 compte_ligne_vide = 0
-                lignes.append(ligne)
+                
+                while True:
+                    try:
+                        ligne = input()
+                    except EOFError:
+                        break
+                    
+                    # Check for back command
+                    if ligne.strip().lower() == 'retour' and len(lignes) == 0:
+                        break
+                    
+                    # Si la ligne est vide, incrémenter le compteur
+                    if not ligne.strip():
+                        compte_ligne_vide += 1
+                        # Si deux lignes vides consécutives
+                        if compte_ligne_vide >= 1 and len(lignes) > 0:
+                            break
+                    else:
+                        compte_ligne_vide = 0
+                        lignes.append(ligne)
+                
+                entree_utilisateur = '\n'.join(lignes).strip()
+                
+                if not entree_utilisateur or lignes == [] and ligne.strip().lower() == 'retour':
+                    break
+                
+                entites = classificateur.predire(entree_utilisateur)
+                
+                print(classificateur.formater_sortie(entites))
+                
+                # Sauvegarde automatique
+                classificateur.enregistrer_dans_fichier(entites)
+                
+                continuer = input("\nAnalyser un autre texte? (o/n): ").strip().lower()
+                if continuer != 'o':
+                    break
         
-        entree_utilisateur = '\n'.join(lignes).strip()
-        
-        if not entree_utilisateur:
-            print("\n👋 Au revoir!")
-            break
-        
-        entites = classificateur.predire(entree_utilisateur)
-        
-        print(classificateur.formater_sortie(entites))
-        
-        # Option d'enregistrement
-        enregistrer = input("💾 Enregistrer? (o/n): ").strip().lower()
-        if enregistrer == 'o':
-            nom_fichier = input("   📄 Nom du fichier [medicaments.json]: ").strip() or "medicaments.json"
-            
-            if not nom_fichier.endswith('.json'):
-                nom_fichier += '.json'
-            
-            classificateur.enregistrer_dans_fichier(entites, nom_fichier)
+        else:
+            print("❌ Choix invalide! Entrez 1, 2 ou 3.")
+    
+    print("\n" + "="*70)
+    print("📁 Tous les résultats sont sauvegardés dans: ./results/")
+    print("="*70)
 
 
 if __name__ == "__main__":

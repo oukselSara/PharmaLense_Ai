@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-01-29T14:14:26.556524",
+  "source_image": "C:\\Users\\oukse\\OneDrive\\Documents\\Graduation\\PharmaLense_Ai\\assets\\photo_2026-01-28_16-20-43.jpg",
+  "bbox": {
+    "x": 62,
+    "y": 0,
+    "width": 520,
+    "height": 1259
+  },
+  "extracted_info": {
+    "name": "LOTN TR-01 E25",
+    "dosage": "042%",
+    "lot_number": "",
+    "expiry_date": "",
+    "price": "",
+    "manufacturer": ""
+  },
+  "raw_text": "[ah CT}\n5\nLOTN®: TR-01 E25\n\nDOF 042%\n\nDPF ‏مركن‎\n‏م22‎\n‎5\n‎He 4 a\n5595 2\n2 :\n\n‎EB‏ 25222 5 بدون سكر\n‎Soe‏\n‏0\n‏59522 عد\n‎ÉLELES:‏ |\n‎LOT: TE-DIEZS‏\n‎F:05/25 Pros 25‏\n‎S‏ ليزوفارم الجزائر\n‎wan TBE unie ©‏"
+}

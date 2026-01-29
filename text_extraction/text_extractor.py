@@ -1,6 +1,6 @@
 """
-Text Extraction Module
-Extracts and parses text from medication labels using OCR
+Text Extraction Module (Updated)
+Extracts and parses text from medication labels using OCR and saves results
 """
 
 import cv2
@@ -10,35 +10,52 @@ import pytesseract
 from PIL import Image
 import re
 import os
+from pathlib import Path
+from datetime import datetime
+import json
 
 # Configure pytesseract to use the Tesseract executable
-pytesseract.pytesseract.pytesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# This will need to be adjusted based on the system
+try:
+    pytesseract.pytesseract.pytesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+except:
+    pass  # On Linux, tesseract should be in PATH
 
 
 class TextExtractor:
-    """Extracts text from image regions and parses medication information"""
+    """Extracts text from image regions, parses medication information, and saves results"""
     
-    def __init__(self, languages='fra+ara+eng'):
+    def __init__(self, languages='fra+ara+eng', results_dir='results'):
         """
         Initialize the text extractor
         
         Args:
             languages: Languages for OCR (default: French, Arabic, English)
+            results_dir: Directory where results will be saved
         """
         self.languages = languages
         self.ocr_config = '--psm 6'  # Assume uniform text block
+        
+        # Create results directory structure
+        self.results_dir = Path(results_dir)
+        self.results_dir.mkdir(exist_ok=True)
+        (self.results_dir / "ocr").mkdir(exist_ok=True)
+        (self.results_dir / "parsed").mkdir(exist_ok=True)
+        (self.results_dir / "json").mkdir(exist_ok=True)
+        (self.results_dir / "text").mkdir(exist_ok=True)
+        
+        print(f"📁 Résultats OCR seront sauvegardés dans: {self.results_dir.absolute()}")
+        
         self._verify_tesseract()
     
     def _verify_tesseract(self):
         """Verify that Tesseract is properly installed"""
         try:
-            pytesseract.pytesseract.pytesseract_cmd
+            version = pytesseract.get_tesseract_version()
+            print(f"✓ Tesseract-OCR version: {version}")
         except Exception as e:
-            raise RuntimeError(
-                f"Tesseract-OCR is not properly installed. "
-                f"Please install it from: https://github.com/UB-Mannheim/tesseract/wiki\n"
-                f"Error: {e}"
-            )
+            print(f"⚠️  Tesseract-OCR may not be properly installed: {e}")
+            print("   Install from: https://github.com/UB-Mannheim/tesseract/wiki")
     
     def extract_roi(self, image_path: str, bbox: Tuple[int, int, int, int]) -> np.ndarray:
         """
@@ -239,17 +256,72 @@ class TextExtractor:
             'full_text': text
         }
     
-    def extract_and_parse(self, image_path: str, bbox: Tuple[int, int, int, int]) -> Dict[str, str]:
+    def save_ocr_results(self, info: Dict[str, str], image_name: str, bbox: Tuple[int, int, int, int]):
+        """
+        Save OCR and parsing results to files
+        
+        Args:
+            info: Parsed medication information
+            image_name: Name of source image
+            bbox: Bounding box that was processed
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_name = f"{Path(image_name).stem}_{timestamp}"
+        
+        # Save raw OCR text
+        text_path = self.results_dir / "ocr" / f"{base_name}_raw_ocr.txt"
+        with open(text_path, 'w', encoding='utf-8') as f:
+            f.write(info['full_text'])
+        print(f"   ✅ OCR brut sauvegardé: {text_path}")
+        
+        # Save parsed information as formatted text
+        parsed_text_path = self.results_dir / "text" / f"{base_name}_parsed.txt"
+        with open(parsed_text_path, 'w', encoding='utf-8') as f:
+            f.write("="*60 + "\n")
+            f.write("INFORMATIONS EXTRAITES DU MÉDICAMENT\n")
+            f.write("="*60 + "\n\n")
+            f.write(f"Nom: {info['name'] or 'Non trouvé'}\n")
+            f.write(f"Dosage: {info['dosage'] or 'Non trouvé'}\n")
+            f.write(f"Numéro de lot: {info['lot_number'] or 'Non trouvé'}\n")
+            f.write(f"Date de péremption: {info['expiry_date'] or 'Non trouvé'}\n")
+            f.write(f"Prix: {info['price'] or 'Non trouvé'}\n")
+            f.write(f"Fabricant: {info['manufacturer'] or 'Non trouvé'}\n")
+            f.write(f"\n{'='*60}\n")
+            f.write("TEXTE COMPLET\n")
+            f.write("="*60 + "\n")
+            f.write(info['full_text'])
+        print(f"   ✅ Analyse formatée sauvegardée: {parsed_text_path}")
+        
+        # Save as JSON
+        json_data = {
+            'timestamp': datetime.now().isoformat(),
+            'source_image': image_name,
+            'bbox': {'x': bbox[0], 'y': bbox[1], 'width': bbox[2], 'height': bbox[3]},
+            'extracted_info': {k: v for k, v in info.items() if k != 'full_text'},
+            'raw_text': info['full_text']
+        }
+        
+        json_path = self.results_dir / "json" / f"{base_name}_ocr.json"
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(json_data, f, indent=2, ensure_ascii=False)
+        print(f"   ✅ JSON sauvegardé: {json_path}")
+    
+    def extract_and_parse(self, image_path: str, bbox: Tuple[int, int, int, int], 
+                         save_results: bool = True) -> Dict[str, str]:
         """
         Main function to extract text and parse medication information
         
         Args:
             image_path: Path to the image
             bbox: Bounding box of the label (x, y, w, h)
+            save_results: Whether to save results to disk
             
         Returns:
             Dictionary with parsed medication information
         """
+        print(f"\n🔍 Extraction de texte depuis: {image_path}")
+        print(f"   • Zone: x={bbox[0]}, y={bbox[1]}, w={bbox[2]}, h={bbox[3]}")
+        
         # Extract ROI
         roi = self.extract_roi(image_path, bbox)
         
@@ -258,11 +330,57 @@ class TextExtractor:
         
         # Perform OCR
         text = self.perform_ocr(preprocessed)
+        print(f"   ✓ Texte extrait ({len(text)} caractères)")
         
         # Parse information
         info = self.parse_all_info(text)
         
+        # Save results if requested
+        if save_results:
+            self.save_ocr_results(info, image_path, bbox)
+        
         return info
+    
+    def batch_extract(self, image_path: str, bboxes: list, save_results: bool = True) -> list:
+        """
+        Extract text from multiple regions in a single image
+        
+        Args:
+            image_path: Path to the image
+            bboxes: List of bounding boxes
+            save_results: Whether to save results
+            
+        Returns:
+            List of parsed information dictionaries
+        """
+        results = []
+        
+        print(f"\n📦 Traitement batch: {len(bboxes)} régions")
+        
+        for idx, bbox in enumerate(bboxes, 1):
+            print(f"\n--- Région {idx}/{len(bboxes)} ---")
+            try:
+                info = self.extract_and_parse(image_path, bbox, save_results)
+                results.append(info)
+            except Exception as e:
+                print(f"   ❌ Erreur: {e}")
+                results.append({'error': str(e)})
+        
+        # Save batch summary
+        if save_results and results:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            batch_path = self.results_dir / "json" / f"batch_{timestamp}.json"
+            batch_data = {
+                'timestamp': datetime.now().isoformat(),
+                'source_image': image_path,
+                'num_regions': len(bboxes),
+                'results': results
+            }
+            with open(batch_path, 'w', encoding='utf-8') as f:
+                json.dump(batch_data, f, indent=2, ensure_ascii=False)
+            print(f"\n✅ Résumé batch sauvegardé: {batch_path}")
+        
+        return results
     
     def set_languages(self, languages: str):
         """
@@ -299,12 +417,13 @@ if __name__ == "__main__":
     extractor = TextExtractor()
     result = extractor.extract_and_parse(image_path, bbox)
     
-    print("Extracted Information:")
-    print("-" * 40)
-    print(f"Name: {result['name']}")
+    print("\n" + "="*60)
+    print("INFORMATIONS EXTRAITES")
+    print("="*60)
+    print(f"Nom: {result['name']}")
     print(f"Dosage: {result['dosage']}")
-    print(f"Lot Number: {result['lot_number']}")
-    print(f"Expiry Date: {result['expiry_date']}")
-    print(f"Price: {result['price']}")
-    print(f"Manufacturer: {result['manufacturer']}")
-    print(f"\nFull Text:\n{result['full_text']}")
+    print(f"Numéro de lot: {result['lot_number']}")
+    print(f"Date de péremption: {result['expiry_date']}")
+    print(f"Prix: {result['price']}")
+    print(f"Fabricant: {result['manufacturer']}")
+    print(f"\nTexte complet:\n{result['full_text']}")

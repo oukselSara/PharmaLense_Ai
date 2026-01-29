@@ -1,26 +1,39 @@
 """
-Label Detection Module
-Detects medication labels in images using computer vision techniques
+Label Detection Module (Updated)
+Detects medication labels in images and saves results to results folder
 """
 
 import cv2
 import numpy as np
 from typing import List, Tuple
+from pathlib import Path
+from datetime import datetime
+import json
 
 
 class LabelDetector:
-    """Detects rectangular labels in images"""
+    """Detects rectangular labels in images and saves results"""
     
-    def __init__(self, min_area=5000, max_area=500000):
+    def __init__(self, min_area=5000, max_area=500000, results_dir="results"):
         """
         Initialize the label detector
         
         Args:
             min_area: Minimum area for label detection (in pixels)
             max_area: Maximum area for label detection (in pixels)
+            results_dir: Directory where results will be saved
         """
         self.min_area = min_area
         self.max_area = max_area
+        
+        # Create results directory structure
+        self.results_dir = Path(results_dir)
+        self.results_dir.mkdir(exist_ok=True)
+        (self.results_dir / "detections").mkdir(exist_ok=True)
+        (self.results_dir / "visualizations").mkdir(exist_ok=True)
+        (self.results_dir / "json").mkdir(exist_ok=True)
+        
+        print(f"📁 Résultats seront sauvegardés dans: {self.results_dir.absolute()}")
     
     def load_image(self, image_path: str) -> np.ndarray:
         """
@@ -135,17 +148,91 @@ class LabelDetector:
         
         return vis_img
     
-    def detect_labels(self, image_path: str, visualize: bool = False) -> Tuple[List[Tuple[int, int, int, int]], np.ndarray]:
+    def extract_label_regions(self, img: np.ndarray, labels: List[Tuple[int, int, int, int]]) -> List[np.ndarray]:
+        """
+        Extract individual label regions from the image
+        
+        Args:
+            img: Original image
+            labels: List of bounding boxes
+            
+        Returns:
+            List of extracted label images
+        """
+        extracted = []
+        for (x, y, w, h) in labels:
+            roi = img[y:y+h, x:x+w]
+            extracted.append(roi)
+        return extracted
+    
+    def save_detection_results(self, image_path: str, labels: List[Tuple[int, int, int, int]], 
+                               vis_img: np.ndarray = None, extracted_labels: List[np.ndarray] = None):
+        """
+        Save detection results to the results folder
+        
+        Args:
+            image_path: Path to original image
+            labels: List of detected bounding boxes
+            vis_img: Visualization image with drawn boxes
+            extracted_labels: List of extracted label regions
+        """
+        # Generate timestamp-based filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        image_name = Path(image_path).stem
+        base_name = f"{image_name}_{timestamp}"
+        
+        # Save JSON with detection information
+        detection_data = {
+            'timestamp': datetime.now().isoformat(),
+            'source_image': str(image_path),
+            'num_labels_detected': len(labels),
+            'labels': [
+                {
+                    'id': idx,
+                    'x': x,
+                    'y': y,
+                    'width': w,
+                    'height': h,
+                    'area': w * h
+                }
+                for idx, (x, y, w, h) in enumerate(labels, 1)
+            ]
+        }
+        
+        json_path = self.results_dir / "json" / f"{base_name}_detection.json"
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(detection_data, f, indent=2, ensure_ascii=False)
+        print(f"   ✅ JSON sauvegardé: {json_path}")
+        
+        # Save visualization image
+        if vis_img is not None:
+            vis_path = self.results_dir / "visualizations" / f"{base_name}_annotated.jpg"
+            cv2.imwrite(str(vis_path), vis_img)
+            print(f"   ✅ Visualisation sauvegardée: {vis_path}")
+        
+        # Save individual extracted labels
+        if extracted_labels is not None:
+            for idx, label_img in enumerate(extracted_labels, 1):
+                label_path = self.results_dir / "detections" / f"{base_name}_label_{idx}.jpg"
+                cv2.imwrite(str(label_path), label_img)
+            print(f"   ✅ {len(extracted_labels)} étiquettes extraites sauvegardées dans: {self.results_dir / 'detections'}")
+    
+    def detect_labels(self, image_path: str, visualize: bool = True, extract: bool = True, 
+                     save_results: bool = True) -> Tuple[List[Tuple[int, int, int, int]], np.ndarray, List[np.ndarray]]:
         """
         Main function to detect labels in an image
         
         Args:
             image_path: Path to input image
             visualize: Whether to create visualization
+            extract: Whether to extract individual labels
+            save_results: Whether to save results to disk
             
         Returns:
-            Tuple of (list of bounding boxes, visualization image or None)
+            Tuple of (list of bounding boxes, visualization image, extracted labels)
         """
+        print(f"\n🔍 Traitement de: {image_path}")
+        
         # Load image
         img = self.load_image(image_path)
         
@@ -154,13 +241,23 @@ class LabelDetector:
         
         # Find labels
         labels = self.find_label_contours(binary)
+        print(f"   ✓ {len(labels)} étiquettes détectées")
         
         # Create visualization if requested
         vis_img = None
         if visualize:
             vis_img = self.draw_labels(img, labels)
         
-        return labels, vis_img
+        # Extract individual labels if requested
+        extracted_labels = None
+        if extract:
+            extracted_labels = self.extract_label_regions(img, labels)
+        
+        # Save results if requested
+        if save_results:
+            self.save_detection_results(image_path, labels, vis_img, extracted_labels)
+        
+        return labels, vis_img, extracted_labels
     
     def save_visualization(self, vis_img: np.ndarray, output_path: str):
         """
@@ -196,13 +293,9 @@ if __name__ == "__main__":
         sys.exit(1)
     
     detector = LabelDetector()
-    labels, vis_img = detector.detect_labels(sys.argv[1], visualize=True)
+    labels, vis_img, extracted = detector.detect_labels(sys.argv[1])
     
-    print(f"Detected {len(labels)} labels:")
+    print(f"\n📊 Résumé:")
+    print(f"   • Étiquettes détectées: {len(labels)}")
     for idx, (x, y, w, h) in enumerate(labels, 1):
-        print(f"  Label {idx}: position=({x}, {y}), size=({w}x{h})")
-    
-    if vis_img is not None:
-        output_path = sys.argv[1].replace('.jpg', '_labels.jpg').replace('.png', '_labels.png')
-        detector.save_visualization(vis_img, output_path)
-        print(f"\nVisualization saved to: {output_path}")
+        print(f"   • Étiquette {idx}: position=({x}, {y}), taille=({w}x{h})")

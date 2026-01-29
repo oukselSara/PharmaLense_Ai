@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-01-29T14:14:23.865970",
+  "source_image": "C:\\Users\\oukse\\OneDrive\\Documents\\Graduation\\PharmaLense_Ai\\assets\\photo_2026-01-28_16-20-43.jpg",
+  "num_labels_detected": 5,
+  "labels": [
+    {
+      "id": 1,
+      "x": 103,
+      "y": 706,
+      "width": 109,
+      "height": 122,
+      "area": 13298
+    },
+    {
+      "id": 2,
+      "x": 72,
+      "y": 663,
+      "width": 142,
+      "height": 128,
+      "area": 18176
+    },
+    {
+      "id": 3,
+      "x": 168,
+      "y": 492,
+      "width": 268,
+      "height": 286,
+      "area": 76648
+    },
+    {
+      "id": 4,
+      "x": 58,
+      "y": 17,
+      "width": 469,
+      "height": 316,
+      "area": 148204
+    },
+    {
+      "id": 5,
+      "x": 62,
+      "y": 0,
+      "width": 520,
+      "height": 1259,
+      "area": 654680
+    }
+  ]
+}
