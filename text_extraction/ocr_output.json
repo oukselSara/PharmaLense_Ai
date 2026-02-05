@@ -1,0 +1,23 @@
+{
+    "image": "C:\\Users\\oukse\\OneDrive\\Documents\\Graduation\\PharmaLense_Ai\\label_detection\\outputs\\enhanced\\20260203_202935_enhanced.jpg",
+    "timestamp": "2026-02-03T20:30:41.793415",
+    "clean_text_one_line": "] 177 288 SULFAZINE FY gi g Suliélorine rtaus LAN nm TS Crime tbe 8 8 q 7 £ , ER PP.A'8 169,11 DA Ï LD NPE zac gain NL: Ÿ NSLot 56€. 9 t FAÂB . 05-207 © EXP: 06.2027 NSSE 2 vs À MTS © Das Bass T1 LL] _ SRE IN | SDes 2 SEM ns, ee em Le] - eoyele aumrcne 3 mzz e 1} VO 'E9 a Vd'd 224 5 À 69: apps “2 — Je shui CCE 8 ÊE ÉlaNzvns 3 En Dur meurs Æ 90 , 25 XESSS 2 * SE U5 Eee 170: dXA , S20Z-60 \"au4 ! 29% 0I.N : 4 41",
+    "raw_orientations": [
+        {
+            "orientation": "0_deg",
+            "text": "] 177\n288 SULFAZINE FY\ngi g Suliélorine rtaus LAN\nnm TS Crime tbe 8 8 q 7 £\n, ER PP.A'8 169,11 DA Ï\nLD NPE zac gain"
+        },
+        {
+            "orientation": "90_deg",
+            "text": "NL:\n\nŸ NSLot 56€. 9\n\nt FAÂB . 05-207\n\n© EXP: 06.2027\n\nNSSE 2\nvs\n\nÀ MTS ©\nDas\nBass T1\nLL] _\nSRE IN\n\n| SDes 2\n\nSEM\nns, ee em\nLe] -"
+        },
+        {
+            "orientation": "180_deg",
+            "text": "eoyele aumrcne 3 mzz e\n1} VO 'E9 a Vd'd 224\n5 À 69: apps “2 —\nJe shui CCE 8 ÊE\nÉlaNzvns"
+        },
+        {
+            "orientation": "270_deg",
+            "text": "3\nEn Dur\nmeurs\nÆ 90\n, 25\nXESSS\n2 *\nSE\nU5 Eee\n170: dXA ,\nS20Z-60 \"au4 !\n29% 0I.N :\n4 41"
+        }
+    ]
+}

@@ -1,0 +1,8 @@
+path: C:/Users/oukse/OneDrive/Documents/Graduation/PharmaLense_Ai/medicine_dataset
+
+train: images/train
+val: images/val
+
+nc: 1
+names:
+  0: medicine_label
