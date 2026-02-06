@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'services/camera_service.dart';
-import 'screens/camera_screen.dart';
+import 'screens/splash_screen.dart';  // Changed from camera_screen
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +35,7 @@ class MedicineLabelScannerApp extends StatelessWidget {
           ),
           appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
         ),
-        home: const CameraScreen(),
+        home: const SplashScreen(),  // Changed to SplashScreen
       ),
     );
   }
