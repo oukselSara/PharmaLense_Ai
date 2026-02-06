@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/scanned_label.dart';
 
-/// Screen for confirming or rejecting scanned label text
+/// Screen for confirming or rejecting scanned label text with color info
 class ConfirmationScreen extends StatelessWidget {
   final ScannedLabel scannedLabel;
   final Function(ScannedLabel) onConfirm;
@@ -15,12 +15,29 @@ class ConfirmationScreen extends StatelessWidget {
     required this.onRetry,
   }) : super(key: key);
 
+  Color _getColorFromLabel() {
+    switch (scannedLabel.dominantColor?.toLowerCase()) {
+      case 'green':
+      case 'light_green':
+        return Colors.green;
+      case 'red':
+      case 'light_red':
+        return Colors.red;
+      case 'white':
+        return Colors.grey;
+      default:
+        return Colors.blue;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final labelColor = _getColorFromLabel();
+    
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.green,
+        backgroundColor: labelColor,
         elevation: 0,
         title: const Text(
           'Confirm Label',
@@ -34,8 +51,8 @@ class ConfirmationScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // Header section with icon
-            _buildHeader(),
+            // Header section with icon and color
+            _buildHeader(labelColor),
 
             // Extracted text section
             Expanded(
@@ -43,20 +60,20 @@ class ConfirmationScreen extends StatelessWidget {
             ),
 
             // Action buttons
-            _buildActionButtons(context),
+            _buildActionButtons(context, labelColor),
           ],
         ),
       ),
     );
   }
 
-  /// Build header with icon
-  Widget _buildHeader() {
+  /// Build header with icon and color indicator
+  Widget _buildHeader(Color labelColor) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.green,
+        color: labelColor,
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(30),
           bottomRight: Radius.circular(30),
@@ -64,16 +81,16 @@ class ConfirmationScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
+          // Color indicator with emoji
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.medication,
-              size: 48,
-              color: Colors.green,
+            child: Text(
+              scannedLabel.colorEmoji,
+              style: const TextStyle(fontSize: 48),
             ),
           ),
           const SizedBox(height: 16),
@@ -86,6 +103,15 @@ class ConfirmationScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
+          Text(
+            scannedLabel.colorDisplayName,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
           Text(
             'Scanned at ${scannedLabel.formattedTime}',
             style: const TextStyle(
@@ -122,10 +148,39 @@ class ConfirmationScreen extends StatelessWidget {
                   color: Colors.black87,
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.copy, size: 20),
-                onPressed: () => _copyToClipboard(context),
-                tooltip: 'Copy to clipboard',
+              Row(
+                children: [
+                  // Color badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _getColorFromLabel().withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _getColorFromLabel(),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      scannedLabel.dominantColor?.toUpperCase() ?? 'UNKNOWN',
+                      style: TextStyle(
+                        color: _getColorFromLabel(),
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Copy button
+                  IconButton(
+                    icon: const Icon(Icons.copy, size: 20),
+                    onPressed: () => _copyToClipboard(context),
+                    tooltip: 'Copy to clipboard',
+                  ),
+                ],
               ),
             ],
           ),
@@ -148,7 +203,7 @@ class ConfirmationScreen extends StatelessWidget {
   }
 
   /// Build action buttons
-  Widget _buildActionButtons(BuildContext context) {
+  Widget _buildActionButtons(BuildContext context, Color labelColor) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -170,7 +225,7 @@ class ConfirmationScreen extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () => onConfirm(scannedLabel),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
+                backgroundColor: labelColor,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -233,10 +288,10 @@ class ConfirmationScreen extends StatelessWidget {
   void _copyToClipboard(BuildContext context) {
     Clipboard.setData(ClipboardData(text: scannedLabel.text));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Text copied to clipboard'),
-        duration: Duration(seconds: 2),
-        backgroundColor: Colors.green,
+      SnackBar(
+        content: const Text('Text copied to clipboard'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: _getColorFromLabel(),
       ),
     );
   }

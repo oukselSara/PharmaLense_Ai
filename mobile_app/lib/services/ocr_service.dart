@@ -14,33 +14,93 @@ class OcrService {
 
   OcrService() {
     // Initialize the text recognizer
-    // Using default script (Latin) - can be configured for other languages
     _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
   }
 
-  /// Process a camera image and extract text
-  /// Returns null if already processing or no text found
-  Future<ScannedLabel?> processImage(CameraImage cameraImage) async {
+  /// Process a camera image and extract text with color detection
+  Future<ScannedLabel?> processImageWithColor(CameraImage cameraImage) async {
     if (_isProcessing) return null;
 
     _isProcessing = true;
     try {
-      // Convert CameraImage to InputImage format for ML Kit
-      final inputImage = await _convertCameraImageToInputImage(cameraImage);
-      if (inputImage == null) return null;
+      // Convert CameraImage to img.Image for both OCR and color detection
+      final image = await _convertCameraImageToImage(cameraImage);
+      if (image == null) return null;
+
+      // Save as temporary file for ML Kit
+      final tempDir = Directory.systemTemp;
+      final tempFile = File(
+          '${tempDir.path}/frame_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await tempFile.writeAsBytes(img.encodeJpg(image));
+
+      // Create InputImage from file
+      final inputImage = InputImage.fromFilePath(tempFile.path);
 
       // Perform text recognition
       final RecognizedText recognizedText =
           await _textRecognizer.processImage(inputImage);
 
-      // Extract all text from blocks
+      // Extract text
       final String extractedText = _extractTextFromBlocks(recognizedText);
+
+      // Detect dominant color
+      final String dominantColor = _detectDominantColor(image);
+
+      // Clean up temp file
+      try {
+        await tempFile.delete();
+      } catch (e) {
+        print('Error deleting temp file: $e');
+      }
 
       if (extractedText.trim().isEmpty) {
         return null;
       }
 
-      // Create and return ScannedLabel model
+      // Create and return ScannedLabel model with color
+      return ScannedLabel(
+        text: extractedText,
+        timestamp: DateTime.now(),
+        dominantColor: dominantColor,
+      );
+    } catch (e) {
+      print('Error processing image: $e');
+      return null;
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  /// Process image without color detection (faster)
+  Future<ScannedLabel?> processImage(CameraImage cameraImage) async {
+    if (_isProcessing) return null;
+
+    _isProcessing = true;
+    try {
+      final image = await _convertCameraImageToImage(cameraImage);
+      if (image == null) return null;
+
+      final tempDir = Directory.systemTemp;
+      final tempFile = File(
+          '${tempDir.path}/frame_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await tempFile.writeAsBytes(img.encodeJpg(image));
+
+      final inputImage = InputImage.fromFilePath(tempFile.path);
+      final RecognizedText recognizedText =
+          await _textRecognizer.processImage(inputImage);
+
+      final String extractedText = _extractTextFromBlocks(recognizedText);
+
+      try {
+        await tempFile.delete();
+      } catch (e) {
+        print('Error deleting temp file: $e');
+      }
+
+      if (extractedText.trim().isEmpty) {
+        return null;
+      }
+
       return ScannedLabel(
         text: extractedText,
         timestamp: DateTime.now(),
@@ -53,15 +113,13 @@ class OcrService {
     }
   }
 
-  /// Convert CameraImage to InputImage for ML Kit by encoding to JPEG and returning an InputImage from file path
-  Future<InputImage?> _convertCameraImageToInputImage(
-      CameraImage cameraImage) async {
+  /// Convert CameraImage to img.Image
+  Future<img.Image?> _convertCameraImageToImage(CameraImage cameraImage) async {
     try {
       final int width = cameraImage.width;
       final int height = cameraImage.height;
 
-      // Create an Image buffer from package:image (aliased as img)
-      final img.Image frame = img.Image(width: width, height: height);
+      final img.Image image = img.Image(width: width, height: height);
 
       final bytesY = cameraImage.planes[0].bytes;
       final bytesU =
@@ -94,23 +152,94 @@ class OcrService {
           g = g.clamp(0, 255);
           b = b.clamp(0, 255);
 
-          frame.setPixelRgba(x, y, r, g, b, 255);
+          image.setPixelRgba(x, y, r, g, b, 255);
         }
       }
 
-      // Encode as JPEG
-      final jpeg = img.encodeJpg(frame);
-
-      // Write to temp file
-      final tempDir = Directory.systemTemp;
-      final file = await File(
-              '${tempDir.path}/frame_${DateTime.now().millisecondsSinceEpoch}.jpg')
-          .writeAsBytes(jpeg);
-
-      return InputImage.fromFilePath(file.path);
+      return image;
     } catch (e) {
       print('Error converting camera image: $e');
       return null;
+    }
+  }
+
+  /// Detect dominant color in the image (green, red, or white)
+  String _detectDominantColor(img.Image image) {
+    try {
+      // Sample pixels from center area (where label should be)
+      final centerX = image.width ~/ 2;
+      final centerY = image.height ~/ 2;
+      final sampleSize = 50; // Sample 50x50 area
+
+      int totalRed = 0;
+      int totalGreen = 0;
+      int totalBlue = 0;
+      int pixelCount = 0;
+
+      // Sample from center region
+      for (int y = centerY - sampleSize; y < centerY + sampleSize; y++) {
+        if (y < 0 || y >= image.height) continue;
+        
+        for (int x = centerX - sampleSize; x < centerX + sampleSize; x++) {
+          if (x < 0 || x >= image.width) continue;
+
+          final pixel = image.getPixel(x, y);
+          totalRed += pixel.r.toInt();
+          totalGreen += pixel.g.toInt();
+          totalBlue += pixel.b.toInt();
+          pixelCount++;
+        }
+      }
+
+      if (pixelCount == 0) return 'unknown';
+
+      // Calculate average RGB values
+      final avgRed = totalRed / pixelCount;
+      final avgGreen = totalGreen / pixelCount;
+      final avgBlue = totalBlue / pixelCount;
+
+      // Determine dominant color
+      // White: All values high and similar
+      if (avgRed > 200 && avgGreen > 200 && avgBlue > 200) {
+        final diff = (avgRed - avgGreen).abs() + 
+                    (avgGreen - avgBlue).abs() + 
+                    (avgBlue - avgRed).abs();
+        if (diff < 30) {
+          return 'white';
+        }
+      }
+
+      // Green: Green channel significantly higher than red
+      if (avgGreen > avgRed + 20 && avgGreen > avgBlue + 20) {
+        return 'green';
+      }
+
+      // Red: Red channel significantly higher than green
+      if (avgRed > avgGreen + 20 && avgRed > avgBlue + 10) {
+        return 'red';
+      }
+
+      // Check for light green (pale green)
+      if (avgGreen > avgRed && avgGreen > 150 && avgRed > 120) {
+        return 'light_green';
+      }
+
+      // Check for light red (pink/pale red)
+      if (avgRed > avgGreen && avgRed > 150 && avgGreen > 120) {
+        return 'light_red';
+      }
+
+      // Default: determine by which channel is highest
+      if (avgGreen > avgRed && avgGreen > avgBlue) {
+        return 'green';
+      } else if (avgRed > avgGreen && avgRed > avgBlue) {
+        return 'red';
+      } else {
+        return 'white';
+      }
+    } catch (e) {
+      print('Error detecting color: $e');
+      return 'unknown';
     }
   }
 
@@ -132,18 +261,41 @@ class OcrService {
   }
 
   /// Quick check if image contains text (lightweight detection)
-  /// Used for real-time feedback without full OCR processing
   Future<bool> hasDetectableText(CameraImage cameraImage) async {
     try {
-      final inputImage = await _convertCameraImageToInputImage(cameraImage);
-      if (inputImage == null) return false;
+      // Quick lightweight check - just convert and check for high contrast areas
+      // This is much faster than full OCR
+      final image = await _convertCameraImageToImage(cameraImage);
+      if (image == null) return false;
 
-      final RecognizedText recognizedText =
-          await _textRecognizer.processImage(inputImage);
+      // Sample center area for text-like patterns
+      final centerX = image.width ~/ 2;
+      final centerY = image.height ~/ 2;
+      final sampleSize = 100;
 
-      // Return true if we found at least one substantial text block
-      return recognizedText.blocks.any(
-          (block) => block.text.length > 3 && block.boundingBox.width > 30);
+      int highContrastPixels = 0;
+      int totalSamples = 0;
+
+      for (int y = centerY - sampleSize; y < centerY + sampleSize; y += 5) {
+        if (y < 0 || y >= image.height) continue;
+        
+        for (int x = centerX - sampleSize; x < centerX + sampleSize; x += 5) {
+          if (x < 0 || x >= image.width) continue;
+
+          final pixel = image.getPixel(x, y);
+          final brightness = (pixel.r.toInt() + pixel.g.toInt() + pixel.b.toInt()) / 3;
+          
+          // Check if pixel is dark enough to be text
+          if (brightness < 100) {
+            highContrastPixels++;
+          }
+          
+          totalSamples++;
+        }
+      }
+
+      // If more than 10% of sampled pixels are dark, likely contains text
+      return totalSamples > 0 && (highContrastPixels / totalSamples) > 0.1;
     } catch (e) {
       print('Error in text detection: $e');
       return false;

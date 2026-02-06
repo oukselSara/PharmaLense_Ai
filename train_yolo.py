@@ -6,7 +6,7 @@ def main():
     # =====================================================
     # PATHS
     # =====================================================
-    DATA_YAML = r"C:/Users/oukse/OneDrive/Documents/Graduation/PharmaLense_Ai/medicine_dataset/data.yaml"
+    DATA_YAML = r"H:\graduation\PharmaLense_Ai\medicine_dataset\data.yaml"
     PROJECT_DIR = "runs/detect"
     EXP_NAME = "medicine_label_mx350"
     CHECKPOINT_PATH = os.path.join(PROJECT_DIR, EXP_NAME, "weights", "last.pt")
