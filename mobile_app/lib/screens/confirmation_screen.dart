@@ -9,11 +9,11 @@ class ConfirmationScreen extends StatelessWidget {
   final VoidCallback onRetry;
 
   const ConfirmationScreen({
-    Key? key,
+    super.key,
     required this.scannedLabel,
     required this.onConfirm,
     required this.onRetry,
-  }) : super(key: key);
+  });
 
   Color _getColorFromLabel() {
     switch (scannedLabel.dominantColor?.toLowerCase()) {
@@ -84,7 +84,7 @@ class ConfirmationScreen extends StatelessWidget {
           // Color indicator with emoji
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
             ),

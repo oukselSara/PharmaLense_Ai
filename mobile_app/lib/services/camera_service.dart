@@ -1,37 +1,52 @@
 import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:ui' show Offset;
 import 'package:permission_handler/permission_handler.dart';
 import '../models/scanned_label.dart';
 import 'ocr_service.dart';
+import 'label_detection_service.dart';
 
-/// Service class for managing camera operations and continuous scanning
+/// Enhanced camera service with automatic YOLO-based label detection
 class CameraService extends ChangeNotifier {
   CameraController? _cameraController;
   final OcrService _ocrService = OcrService();
+  final YoloLabelDetectionService _yoloService = YoloLabelDetectionService();
 
   bool _isInitialized = false;
   bool _isScanning = false;
   bool _isProcessingFrame = false;
-  bool _isFocusLocked = false;
+  bool _labelDetected = false;
+  bool _serverConnected = false;
   String _statusMessage = 'Initializing...';
 
   Timer? _scanTimer;
-  static const Duration _scanInterval = Duration(milliseconds: 800);
+  static const Duration _scanInterval = Duration(milliseconds: 300); // Faster for YOLO
   
   CameraImage? _currentFrame;
+  DetectionResult? _currentDetection;
 
   // Getters
   CameraController? get cameraController => _cameraController;
   bool get isInitialized => _isInitialized;
   bool get isScanning => _isScanning;
-  bool get isFocusLocked => _isFocusLocked;
+  bool get labelDetected => _labelDetected;
+  bool get serverConnected => _serverConnected;
   String get statusMessage => _statusMessage;
+  DetectionResult? get currentDetection => _currentDetection;
 
-  /// Initialize camera and request permissions
+  /// Initialize camera and check server connection
   Future<bool> initialize() async {
     try {
+      _updateStatus('Checking server connection...');
+
+      // Check if YOLO backend is available
+      _serverConnected = await _yoloService.checkServerConnection();
+      
+      if (!_serverConnected) {
+        _updateStatus('⚠️ Detection server offline - using fallback mode');
+        // Continue anyway - we can use OCR-only mode
+      }
+
       _updateStatus('Requesting camera permission...');
 
       // Request camera permission
@@ -50,51 +65,65 @@ class CameraService extends ChangeNotifier {
         return false;
       }
 
-      // Use back camera (index 0 is typically back camera)
+      // Use back camera
       final camera = cameras.first;
 
-      // Initialize camera controller with medium resolution for balance
+      // Initialize camera controller
       _cameraController = CameraController(
         camera,
-        ResolutionPreset.medium,
+        ResolutionPreset.high, // Higher res for better YOLO detection
         enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.yuv420, // For ML Kit compatibility
+        imageFormatGroup: ImageFormatGroup.yuv420,
       );
 
       await _cameraController!.initialize();
 
-      // Set focus mode to auto
+      // Set focus and exposure modes
       await _cameraController!.setFocusMode(FocusMode.auto);
       await _cameraController!.setExposureMode(ExposureMode.auto);
 
       _isInitialized = true;
-      _updateStatus('Ready to scan');
+      
+      if (_serverConnected) {
+        _updateStatus('✅ Ready - AI detection active');
+      } else {
+        _updateStatus('⚠️ Ready - Manual mode (server offline)');
+      }
 
       notifyListeners();
       return true;
     } catch (e) {
       _updateStatus('Camera initialization failed: $e');
-      print('Camera initialization error: $e');
+      if (kDebugMode) {
+        print('Camera initialization error: $e');
+      }
       return false;
     }
   }
 
-  /// Start continuous scanning mode
+  /// Start automatic scanning with YOLO detection
   void startScanning(Function(ScannedLabel) onLabelDetected) {
     if (!_isInitialized || _isScanning) return;
 
     _isScanning = true;
-    _isFocusLocked = false;
-    _updateStatus('Scanning for labels...');
+    _labelDetected = false;
+    _currentDetection = null;
+    
+    if (_serverConnected) {
+      _updateStatus('🔍 Scanning for labels...');
+    } else {
+      _updateStatus('📷 Position label in frame');
+    }
+    
     notifyListeners();
 
-    // Start image stream for continuous capture
+    // Start image stream
     _startImageStream();
 
-    // Start periodic processing
+    // Start periodic YOLO detection
     _scanTimer = Timer.periodic(_scanInterval, (timer) async {
       if (_currentFrame != null && !_isProcessingFrame) {
-        await _processFrame(_currentFrame!, onLabelDetected);
+        await _processFrameWithYolo(_currentFrame!, onLabelDetected);
       }
     });
   }
@@ -107,11 +136,12 @@ class CameraService extends ChangeNotifier {
 
     try {
       _cameraController!.startImageStream((CameraImage image) {
-        // Store the latest frame
         _currentFrame = image;
       });
     } catch (e) {
-      print('Error starting image stream: $e');
+      if (kDebugMode) {
+        print('Error starting image stream: $e');
+      }
     }
   }
 
@@ -124,27 +154,16 @@ class CameraService extends ChangeNotifier {
         await _cameraController!.stopImageStream();
       }
     } catch (e) {
-      print('Error stopping image stream: $e');
+      if (kDebugMode) {
+        print('Error stopping image stream: $e');
+      }
     }
     
     _currentFrame = null;
   }
 
-  /// Stop scanning mode
-  Future<void> stopScanning() async {
-    _scanTimer?.cancel();
-    _scanTimer = null;
-    
-    await _stopImageStream();
-    
-    _isScanning = false;
-    _isFocusLocked = false;
-    _updateStatus('Ready to scan');
-    notifyListeners();
-  }
-
-  /// Process a single camera frame
-  Future<void> _processFrame(
+  /// Process frame with YOLO detection
+  Future<void> _processFrameWithYolo(
     CameraImage image,
     Function(ScannedLabel) onLabelDetected,
   ) async {
@@ -153,77 +172,139 @@ class CameraService extends ChangeNotifier {
     _isProcessingFrame = true;
 
     try {
-      // First, check if there's detectable text
-      final hasText = await _ocrService.hasDetectableText(image);
+      if (_serverConnected) {
+        // Use YOLO backend for detection
+        final detection = await _yoloService.detectLive(image);
 
-      if (hasText && !_isFocusLocked) {
-        // Lock focus on detected text area
-        await _lockFocusOnLabel();
-        _updateStatus('Label detected! Locking focus...');
-        notifyListeners();
-
-        // Wait for focus to stabilize
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
-
-      if (_isFocusLocked || hasText) {
-        // Process the full image with OCR and color detection
-        final scannedLabel = await _ocrService.processImageWithColor(image);
-
-        if (scannedLabel != null && scannedLabel.hasValidText) {
-          // Stop scanning and image stream
-          _scanTimer?.cancel();
-          await _stopImageStream();
-          
-          _isScanning = false;
-          _updateStatus('Text extracted successfully!');
+        if (detection != null) {
+          // Label detected!
+          _currentDetection = detection;
+          _labelDetected = true;
+          _updateStatus('✅ Label found! Hold steady...');
           notifyListeners();
 
-          // Notify callback
-          onLabelDetected(scannedLabel);
+          // Wait a moment for stabilization
+          await Future.delayed(const Duration(milliseconds: 800));
+
+          // Now perform OCR on the detected region
+          await _performOcrOnDetection(image, onLabelDetected);
+        } else {
+          // No detection - keep scanning
+          _currentDetection = null;
+          _labelDetected = false;
+          if (_isScanning) {
+            _updateStatus('🔍 Scanning for labels...');
+            notifyListeners();
+          }
         }
+      } else {
+        // Fallback: Use OCR-based detection (slower)
+        await _processFrameWithOcr(image, onLabelDetected);
       }
     } catch (e) {
-      print('Error processing frame: $e');
+      if (kDebugMode) {
+        print('Error processing frame: $e');
+      }
     } finally {
       _isProcessingFrame = false;
     }
   }
 
-  /// Lock focus on detected label area
-  Future<void> _lockFocusOnLabel() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      return;
-    }
-
+  /// Perform OCR on detected label region
+  Future<void> _performOcrOnDetection(
+    CameraImage image,
+    Function(ScannedLabel) onLabelDetected,
+  ) async {
     try {
-      // Lock focus at center of frame (where label should be)
-      await _cameraController!.setFocusPoint(const Offset(0.5, 0.5));
-      await _cameraController!.setFocusMode(FocusMode.locked);
-      
-      // Lock exposure
-      await _cameraController!.setExposurePoint(const Offset(0.5, 0.5));
-      await _cameraController!.setExposureMode(ExposureMode.locked);
-      
-      _isFocusLocked = true;
+      _updateStatus('📝 Reading text...');
+      notifyListeners();
+
+      // Process with OCR and color detection
+      final scannedLabel = await _ocrService.processImageWithColor(image);
+
+      if (scannedLabel != null && scannedLabel.hasValidText) {
+        // Success! Stop scanning
+        _scanTimer?.cancel();
+        await _stopImageStream();
+        
+        _isScanning = false;
+        _updateStatus('✅ Text extracted successfully!');
+        notifyListeners();
+
+        // Notify callback
+        onLabelDetected(scannedLabel);
+      } else {
+        // No text found, keep trying
+        _updateStatus('⚠️ No text detected, repositioning...');
+        _labelDetected = false;
+        _currentDetection = null;
+        notifyListeners();
+      }
     } catch (e) {
-      print('Error locking focus: $e');
+      if (kDebugMode) {
+        print('Error in OCR: $e');
+      }
+      _updateStatus('❌ OCR failed, retrying...');
+      _labelDetected = false;
+      _currentDetection = null;
+      notifyListeners();
     }
   }
 
-  /// Unlock focus
-  Future<void> unlockFocus() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      return;
-    }
-
+  /// Fallback OCR-based detection (when server offline)
+  Future<void> _processFrameWithOcr(
+    CameraImage image,
+    Function(ScannedLabel) onLabelDetected,
+  ) async {
     try {
-      await _cameraController!.setFocusMode(FocusMode.auto);
-      await _cameraController!.setExposureMode(ExposureMode.auto);
-      _isFocusLocked = false;
+      // Quick text detection check
+      final hasText = await _ocrService.hasDetectableText(image);
+
+      if (hasText) {
+        _labelDetected = true;
+        _updateStatus('📝 Text detected! Reading...');
+        notifyListeners();
+
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        final scannedLabel = await _ocrService.processImageWithColor(image);
+
+        if (scannedLabel != null && scannedLabel.hasValidText) {
+          _scanTimer?.cancel();
+          await _stopImageStream();
+          
+          _isScanning = false;
+          _updateStatus('✅ Text extracted!');
+          notifyListeners();
+
+          onLabelDetected(scannedLabel);
+        }
+      } else {
+        _labelDetected = false;
+        if (_isScanning) {
+          _updateStatus('📷 Position label in frame');
+          notifyListeners();
+        }
+      }
     } catch (e) {
-      print('Error unlocking focus: $e');
+      if (kDebugMode) {
+        print('Error in OCR fallback: $e');
+      }
     }
+  }
+
+  /// Stop scanning
+  Future<void> stopScanning() async {
+    _scanTimer?.cancel();
+    _scanTimer = null;
+    
+    await _stopImageStream();
+    
+    _isScanning = false;
+    _labelDetected = false;
+    _currentDetection = null;
+    _updateStatus('Ready to scan');
+    notifyListeners();
   }
 
   /// Update status message
@@ -232,19 +313,35 @@ class CameraService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Pause camera (useful when navigating away)
+  /// Pause camera
   Future<void> pause() async {
     await stopScanning();
-    await unlockFocus();
   }
 
-  /// Resume camera operations
+  /// Resume camera
   Future<void> resume() async {
     if (_isInitialized) {
-      await unlockFocus();
-      _updateStatus('Ready to scan');
+      _updateStatus(_serverConnected 
+          ? '✅ Ready - AI detection active' 
+          : '⚠️ Ready - Manual mode');
       notifyListeners();
     }
+  }
+
+  /// Retry server connection
+  Future<void> retryServerConnection() async {
+    _updateStatus('Checking server...');
+    notifyListeners();
+    
+    _serverConnected = await _yoloService.checkServerConnection();
+    
+    if (_serverConnected) {
+      _updateStatus('✅ Server connected!');
+    } else {
+      _updateStatus('⚠️ Server offline - using manual mode');
+    }
+    
+    notifyListeners();
   }
 
   /// Dispose resources

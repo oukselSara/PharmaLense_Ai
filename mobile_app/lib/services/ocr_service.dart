@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_commons/google_mlkit_commons.dart' show InputImage;
@@ -50,7 +51,9 @@ class OcrService {
       try {
         await tempFile.delete();
       } catch (e) {
-        print('Error deleting temp file: $e');
+        if (kDebugMode) {
+          print('Error deleting temp file: $e');
+        }
       }
 
       if (extractedText.trim().isEmpty) {
@@ -64,7 +67,9 @@ class OcrService {
         dominantColor: dominantColor,
       );
     } catch (e) {
-      print('Error processing image: $e');
+      if (kDebugMode) {
+        print('Error processing image: $e');
+      }
       return null;
     } finally {
       _isProcessing = false;
@@ -94,7 +99,9 @@ class OcrService {
       try {
         await tempFile.delete();
       } catch (e) {
-        print('Error deleting temp file: $e');
+        if (kDebugMode) {
+          print('Error deleting temp file: $e');
+        }
       }
 
       if (extractedText.trim().isEmpty) {
@@ -106,7 +113,9 @@ class OcrService {
         timestamp: DateTime.now(),
       );
     } catch (e) {
-      print('Error processing image: $e');
+      if (kDebugMode) {
+        print('Error processing image: $e');
+      }
       return null;
     } finally {
       _isProcessing = false;
@@ -158,7 +167,9 @@ class OcrService {
 
       return image;
     } catch (e) {
-      print('Error converting camera image: $e');
+      if (kDebugMode) {
+        print('Error converting camera image: $e');
+      }
       return null;
     }
   }
@@ -169,7 +180,7 @@ class OcrService {
       // Sample pixels from center area (where label should be)
       final centerX = image.width ~/ 2;
       final centerY = image.height ~/ 2;
-      final sampleSize = 50; // Sample 50x50 area
+      const sampleSize = 50; // Sample 50x50 area
 
       int totalRed = 0;
       int totalGreen = 0;
@@ -238,7 +249,9 @@ class OcrService {
         return 'white';
       }
     } catch (e) {
-      print('Error detecting color: $e');
+      if (kDebugMode) {
+        print('Error detecting color: $e');
+      }
       return 'unknown';
     }
   }
@@ -271,7 +284,7 @@ class OcrService {
       // Sample center area for text-like patterns
       final centerX = image.width ~/ 2;
       final centerY = image.height ~/ 2;
-      final sampleSize = 100;
+      const sampleSize = 100;
 
       int highContrastPixels = 0;
       int totalSamples = 0;
@@ -297,7 +310,9 @@ class OcrService {
       // If more than 10% of sampled pixels are dark, likely contains text
       return totalSamples > 0 && (highContrastPixels / totalSamples) > 0.1;
     } catch (e) {
-      print('Error in text detection: $e');
+      if (kDebugMode) {
+        print('Error in text detection: $e');
+      }
       return false;
     }
   }

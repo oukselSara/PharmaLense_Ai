@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// Invoice scanning screen - placeholder for your custom implementation
 class InvoiceScanScreen extends StatelessWidget {
-  const InvoiceScanScreen({Key? key}) : super(key: key);
+  const InvoiceScanScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

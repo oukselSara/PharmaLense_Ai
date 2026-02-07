@@ -17,7 +17,7 @@ void main() {
 }
 
 class MedicineLabelScannerApp extends StatelessWidget {
-  const MedicineLabelScannerApp({Key? key}) : super(key: key);
+  const MedicineLabelScannerApp({super.key});
 
   @override
   Widget build(BuildContext context) {

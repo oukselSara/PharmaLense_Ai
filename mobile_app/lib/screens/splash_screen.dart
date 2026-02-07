@@ -4,7 +4,7 @@ import 'home_screen.dart';
 
 /// Splash screen with medical logo shown on app launch
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({Key? key}) : super(key: key);
+  const SplashScreen({super.key});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();

@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import '../services/label_detection_service.dart';
 
-/// Widget that displays the camera preview with detection overlay
+/// Camera preview widget with YOLO detection overlay
 class CameraPreviewWidget extends StatelessWidget {
   final CameraController cameraController;
   final bool isScanning;
-  final bool isFocusLocked;
+  final bool labelDetected;
   final String statusMessage;
+  final DetectionResult? detectionBox;
 
   const CameraPreviewWidget({
-    Key? key,
+    super.key,
     required this.cameraController,
     required this.isScanning,
-    this.isFocusLocked = false,
+    required this.labelDetected,
     required this.statusMessage,
-  }) : super(key: key);
+    this.detectionBox,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -27,278 +30,239 @@ class CameraPreviewWidget extends StatelessWidget {
       );
     }
 
-    final size = MediaQuery.of(context).size;
-    final cameraRatio = cameraController.value.aspectRatio;
-
     return Stack(
       fit: StackFit.expand,
       children: [
         // Camera preview
-        ClipRect(
-          child: OverflowBox(
-            alignment: Alignment.center,
-            child: FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: size.width,
-                height: size.width * cameraRatio,
-                child: CameraPreview(cameraController),
+        _buildCameraPreview(context),
+
+        // YOLO detection overlay
+        if (detectionBox != null)
+          _buildDetectionOverlay(context),
+
+        // Status and instructions
+        _buildStatusOverlay(context),
+      ],
+    );
+  }
+
+  /// Build camera preview with proper aspect ratio
+  Widget _buildCameraPreview(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final cameraRatio = cameraController.value.aspectRatio;
+
+    return ClipRect(
+      child: OverflowBox(
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: size.width,
+            height: size.width * cameraRatio,
+            child: CameraPreview(cameraController),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Build detection box overlay (YOLO bounding box)
+  Widget _buildDetectionOverlay(BuildContext context) {
+    return CustomPaint(
+      painter: YoloDetectionPainter(
+        detectionBox: detectionBox!,
+        labelDetected: labelDetected,
+      ),
+    );
+  }
+
+  /// Build status overlay with instructions
+  Widget _buildStatusOverlay(BuildContext context) {
+    return Column(
+      children: [
+        // Top instruction banner
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isScanning && !labelDetected) ...[
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              if (labelDetected)
+                const Icon(
+                  Icons.check_circle,
+                  color: Colors.green,
+                  size: 20,
+                ),
+              if (labelDetected) const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  statusMessage,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
-            ),
+            ],
           ),
         ),
 
-        // Detection overlay
-        DetectionOverlay(
-          isScanning: isScanning,
-          isFocusLocked: isFocusLocked,
-          statusMessage: statusMessage,
-        ),
+        const Spacer(),
+
+        // Bottom help text (only when not detected)
+        if (!labelDetected && isScanning)
+          Container(
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Column(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: Colors.white70,
+                  size: 20,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Point camera at medicine label\nDetection will happen automatically',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
 }
 
-/// Overlay widget showing scanning frame and status
-class DetectionOverlay extends StatefulWidget {
-  final bool isScanning;
-  final bool isFocusLocked;
-  final String statusMessage;
+/// Custom painter for YOLO detection box
+class YoloDetectionPainter extends CustomPainter {
+  final DetectionResult detectionBox;
+  final bool labelDetected;
 
-  const DetectionOverlay({
-    Key? key,
-    required this.isScanning,
-    required this.isFocusLocked,
-    required this.statusMessage,
-  }) : super(key: key);
+  YoloDetectionPainter({
+    required this.detectionBox,
+    required this.labelDetected,
+  });
 
   @override
-  State<DetectionOverlay> createState() => _DetectionOverlayState();
-}
+  void paint(Canvas canvas, Size size) {
+    // Draw detection box
+    final paint = Paint()
+      ..color = labelDetected ? Colors.green : Colors.orange
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
 
-class _DetectionOverlayState extends State<DetectionOverlay>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _pulseAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    )..repeat(reverse: true);
-
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeInOut,
-      ),
+    // Convert YOLO coordinates to screen coordinates
+    // Note: This assumes camera image and screen have same aspect ratio
+    // You may need to adjust based on your camera resolution
+    final rect = Rect.fromLTRB(
+      detectionBox.box.x1.toDouble(),
+      detectionBox.box.y1.toDouble(),
+      detectionBox.box.x2.toDouble(),
+      detectionBox.box.y2.toDouble(),
     );
-  }
 
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
+    // Draw main box
+    canvas.drawRect(rect, paint);
 
-  @override
-  Widget build(BuildContext context) {
-    final borderColor = widget.isFocusLocked
-        ? Colors.orange
-        : (widget.isScanning ? Colors.green : Colors.white);
+    // Draw corners for better visibility
+    _drawCorner(canvas, rect.topLeft, true, true, paint);
+    _drawCorner(canvas, rect.topRight, true, false, paint);
+    _drawCorner(canvas, rect.bottomLeft, false, true, paint);
+    _drawCorner(canvas, rect.bottomRight, false, false, paint);
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: borderColor.withOpacity(0.5),
-          width: 3,
-        ),
-      ),
-      child: Stack(
-        children: [
-          // Semi-transparent overlay
-          Container(
-            color: Colors.black.withOpacity(0.3),
-          ),
-
-          // Scanning area indicator (center rectangle)
-          Center(
-            child: AnimatedBuilder(
-              animation: _pulseAnimation,
-              builder: (context, child) {
-                return Transform.scale(
-                  scale: widget.isFocusLocked ? _pulseAnimation.value : 1.0,
-                  child: Container(
-                    width: MediaQuery.of(context).size.width * 0.8,
-                    height: MediaQuery.of(context).size.height * 0.4,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: borderColor,
-                        width: widget.isFocusLocked ? 3 : 2,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      color: widget.isFocusLocked
-                          ? Colors.orange.withOpacity(0.1)
-                          : Colors.transparent,
-                    ),
-                    child: Stack(
-                      children: [
-                        // Corner indicators
-                        _buildCornerIndicator(Alignment.topLeft, borderColor),
-                        _buildCornerIndicator(Alignment.topRight, borderColor),
-                        _buildCornerIndicator(
-                            Alignment.bottomLeft, borderColor),
-                        _buildCornerIndicator(
-                            Alignment.bottomRight, borderColor),
-
-                        // Center instruction or focus lock indicator
-                        Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: widget.isFocusLocked
-                                ? Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.center_focus_strong,
-                                        color: Colors.orange,
-                                        size: 20,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Text(
-                                        'Focus Locked - Scanning...',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                : const Text(
-                                    'Position label in frame',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                          ),
-                        ),
-
-                        // Focus lock icon in corner when locked
-                        if (widget.isFocusLocked)
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.withOpacity(0.9),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.lock,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Status message at bottom
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 40,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (widget.isScanning && !widget.isFocusLocked) ...[
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.green),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  if (widget.isFocusLocked)
-                    const Icon(
-                      Icons.center_focus_strong,
-                      color: Colors.orange,
-                      size: 20,
-                    ),
-                  if (widget.isFocusLocked) const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      widget.statusMessage,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Build corner indicator for scanning frame
-  Widget _buildCornerIndicator(Alignment alignment, Color color) {
-    return Align(
-      alignment: alignment,
-      child: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          border: Border(
-            top: alignment.y < 0
-                ? BorderSide(color: color, width: 4)
-                : BorderSide.none,
-            bottom: alignment.y > 0
-                ? BorderSide(color: color, width: 4)
-                : BorderSide.none,
-            left: alignment.x < 0
-                ? BorderSide(color: color, width: 4)
-                : BorderSide.none,
-            right: alignment.x > 0
-                ? BorderSide(color: color, width: 4)
-                : BorderSide.none,
+    // Draw confidence label
+    if (labelDetected) {
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: '${(detectionBox.confidence * 100).toStringAsFixed(0)}%',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
           ),
         ),
+        textDirection: TextDirection.ltr,
+      );
+
+      textPainter.layout();
+
+      final labelRect = Rect.fromLTWH(
+        rect.left,
+        rect.top - 30,
+        textPainter.width + 16,
+        24,
+      );
+
+      final labelPaint = Paint()
+        ..color = Colors.green
+        ..style = PaintingStyle.fill;
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(labelRect, const Radius.circular(4)),
+        labelPaint,
+      );
+
+      textPainter.paint(
+        canvas,
+        Offset(rect.left + 8, rect.top - 28),
+      );
+    }
+  }
+
+  void _drawCorner(Canvas canvas, Offset point, bool isTop, bool isLeft, Paint paint) {
+    const cornerLength = 20.0;
+    
+    // Horizontal line
+    canvas.drawLine(
+      point,
+      Offset(
+        point.dx + (isLeft ? cornerLength : -cornerLength),
+        point.dy,
       ),
+      paint..strokeWidth = 4,
     );
+
+    // Vertical line
+    canvas.drawLine(
+      point,
+      Offset(
+        point.dx,
+        point.dy + (isTop ? cornerLength : -cornerLength),
+      ),
+      paint..strokeWidth = 4,
+    );
+  }
+
+  @override
+  bool shouldRepaint(YoloDetectionPainter oldDelegate) {
+    return oldDelegate.detectionBox != detectionBox ||
+        oldDelegate.labelDetected != labelDetected;
   }
 }
