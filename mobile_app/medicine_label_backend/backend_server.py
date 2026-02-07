@@ -14,8 +14,6 @@ app = FastAPI()
 # MODEL CONFIGURATION
 # ==================================================
 MODEL_PATH = r"H:\graduation\PharmaLense_Ai\runs\detect\runs\detect\medicine_label_lowdata2\weights\last.pt"
-
-
 CONF_THRESHOLD = 0.35
 
 # Load model once at startup
@@ -26,18 +24,7 @@ if not torch.cuda.is_available():
 else:
     print(f"✅ Using GPU: {torch.cuda.get_device_name(0)}")
     device = 0
-try:
-    # Allowlist ultralytics DetectionModel for safe deserialization in newer PyTorch
-    # This is required when loading older-style checkpoints that include model class
-    # definitions in the checkpoint. Only do this for trusted checkpoints.
-    import ultralytics.nn.tasks as _ultra_tasks
-    torch.serialization.add_safe_globals([_ultra_tasks.DetectionModel])
-except Exception:
-    # If the helper isn't available for some torch versions, continue and let
-    # the YOLO loader attempt to load (may still fail).
-    pass
 
-# Load the YOLO model
 model = YOLO(MODEL_PATH)
 print("✅ Model loaded successfully")
 
