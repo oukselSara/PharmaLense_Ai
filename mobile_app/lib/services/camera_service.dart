@@ -21,7 +21,7 @@ class CameraService extends ChangeNotifier {
   String _statusMessage = 'Initializing...';
 
   Timer? _scanTimer;
-  static const Duration _scanInterval = Duration(milliseconds: 300); // Faster for YOLO
+  static const Duration _scanInterval = Duration(milliseconds: 800); // Slower for CPU backend
   
   CameraImage? _currentFrame;
   DetectionResult? _currentDetection;
@@ -212,6 +212,8 @@ class CameraService extends ChangeNotifier {
   }
 
   /// Perform OCR on detected label region
+  /// CRITICAL: This method ONLY processes the cropped image from YOLO detection
+  /// It NEVER processes the full CameraImage - the bounding box is an absolute constraint
   Future<void> _performOcrOnDetection(
     CameraImage image,
     Function(ScannedLabel) onLabelDetected,
@@ -220,14 +222,40 @@ class CameraService extends ChangeNotifier {
       _updateStatus('📝 Reading text...');
       notifyListeners();
 
-      // Process with OCR and color detection
-      final scannedLabel = await _ocrService.processImageWithColor(image);
+      // CRITICAL: Use ONLY the cropped image from the detection result
+      // This ensures OCR can only access pixels within the bounding box
+      ScannedLabel? scannedLabel;
+
+      if (_currentDetection?.croppedImageFile != null) {
+        // Process the pre-cropped image - this contains ONLY label pixels
+        scannedLabel = await _ocrService.processImageFile(_currentDetection!.croppedImageFile!);
+
+        // Clean up temporary cropped file after processing
+        try {
+          await _currentDetection!.croppedImageFile!.delete();
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('Error deleting temp cropped file: $e');
+          }
+        }
+      } else {
+        // Fallback: No cropped image available (shouldn't happen with new backend)
+        // In this case, we must NOT process the full frame
+        if (kDebugMode) {
+          debugPrint('WARNING: No cropped image from detection - skipping OCR');
+        }
+        _updateStatus('⚠️ No cropped image, repositioning...');
+        _labelDetected = false;
+        _currentDetection = null;
+        notifyListeners();
+        return;
+      }
 
       if (scannedLabel != null && scannedLabel.hasValidText) {
         // Success! Stop scanning
         _scanTimer?.cancel();
         await _stopImageStream();
-        
+
         _isScanning = false;
         _updateStatus('✅ Text extracted successfully!');
         notifyListeners();
@@ -253,6 +281,9 @@ class CameraService extends ChangeNotifier {
   }
 
   /// Fallback OCR-based detection (when server offline)
+  /// NOTE: This fallback mode processes the full CameraImage since no detection box is available
+  /// This only runs when the YOLO backend is offline - it's a degraded mode
+  /// When the backend is online, strict bounding box constraints are enforced
   Future<void> _processFrameWithOcr(
     CameraImage image,
     Function(ScannedLabel) onLabelDetected,
@@ -273,7 +304,7 @@ class CameraService extends ChangeNotifier {
         if (scannedLabel != null && scannedLabel.hasValidText) {
           _scanTimer?.cancel();
           await _stopImageStream();
-          
+
           _isScanning = false;
           _updateStatus('✅ Text extracted!');
           notifyListeners();
@@ -378,13 +409,54 @@ class CameraService extends ChangeNotifier {
   }
 
   /// Process uploaded image from gallery
+  /// CRITICAL: When server is online, this uses YOLO to detect and crop the label
+  /// OCR then processes ONLY the cropped region within the bounding box
   Future<ScannedLabel?> processUploadedImage(File imageFile) async {
     try {
       _updateStatus('Processing uploaded image...');
       notifyListeners();
 
-      // Read image file and process with OCR
-      final scannedLabel = await _ocrService.processImageFile(imageFile);
+      ScannedLabel? scannedLabel;
+
+      if (_serverConnected) {
+        // Use YOLO backend to detect and crop the label
+        _updateStatus('Detecting label...');
+        notifyListeners();
+
+        final croppedResult = await _yoloService.detectAndCrop(imageFile);
+
+        if (croppedResult != null) {
+          // Save the cropped image to a temp file
+          final tempDir = Directory.systemTemp;
+          final timestamp = DateTime.now().millisecondsSinceEpoch;
+          final croppedFile = File('${tempDir.path}/gallery_cropped_$timestamp.jpg');
+          await croppedFile.writeAsBytes(croppedResult.croppedImage);
+
+          _updateStatus('Reading text...');
+          notifyListeners();
+
+          // Process ONLY the cropped image with OCR
+          scannedLabel = await _ocrService.processImageFile(croppedFile);
+
+          // Clean up temp file
+          try {
+            await croppedFile.delete();
+          } catch (e) {
+            if (kDebugMode) {
+              debugPrint('Error deleting temp file: $e');
+            }
+          }
+        } else {
+          _updateStatus('No label detected in image');
+          return null;
+        }
+      } else {
+        // Fallback: Server offline, process full image
+        // This is degraded mode - strict box constraint only applies when server is online
+        _updateStatus('Processing image (manual mode)...');
+        notifyListeners();
+        scannedLabel = await _ocrService.processImageFile(imageFile);
+      }
 
       if (scannedLabel != null && scannedLabel.hasValidText) {
         _updateStatus('Text extracted successfully!');
@@ -395,7 +467,7 @@ class CameraService extends ChangeNotifier {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error processing uploaded image: $e');
+        debugPrint('Error processing uploaded image: $e');
       }
       _updateStatus('Failed to process image');
       return null;

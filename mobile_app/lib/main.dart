@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'services/camera_service.dart';
-import 'screens/splash_screen.dart';  // Changed from camera_screen
+import 'screens/splash_screen.dart';
 
 void main() {
+  // Ensure Flutter bindings are initialized FIRST for fastest startup
   WidgetsFlutterBinding.ensureInitialized();
 
   // Set preferred orientations (portrait only for better scanning)
@@ -13,6 +14,7 @@ void main() {
     DeviceOrientation.portraitDown,
   ]);
 
+  // Run app immediately - no delays
   runApp(const MedicineLabelScannerApp());
 }
 
@@ -35,7 +37,8 @@ class MedicineLabelScannerApp extends StatelessWidget {
           ),
           appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
         ),
-        home: const SplashScreen(),  // Changed to SplashScreen
+        // Go directly to splash screen - no loading delays
+        home: const SplashScreen(),
       ),
     );
   }

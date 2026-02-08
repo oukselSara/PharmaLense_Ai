@@ -1,0 +1,29 @@
+# Flutter Native Splash - Ultra Fast Configuration
+# Makes native splash IDENTICAL to Flutter splash
+# Transition is invisible - user can't tell when it switches!
+#
+# To apply: dart run flutter_native_splash:create
+
+flutter_native_splash:
+  # Match your Flutter splash gradient color exactly
+  color: "#14B57F"
+  
+  # Use your logo to match the Flutter splash
+  image: assets/images/logo.png
+  
+  # Center the logo
+  android_gravity: center
+  ios_content_mode: center
+  
+  # Fullscreen for fastest load
+  fullscreen: true
+  
+  # Android 12+ optimized settings
+  android_12:
+    color: "#14B57F"
+    image: assets/images/logo.png
+    icon_background_color: "#FFFFFF"
+  
+  android: true
+  ios: true
+  web: false

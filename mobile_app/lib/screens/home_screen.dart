@@ -107,36 +107,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
       child: Row(
         children: [
-          // Logo
+          // Logo - Bigger size for better visibility
           Container(
-            width: 48,
-            height: 48,
+            width: 72,  // Increased from 48
+            height: 72, // Increased from 48
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0A4D3C),
-                  Color(0xFF14B57F),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(14),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18), // Increased from 14
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF14B57F).withValues(alpha: 0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+                  color: const Color(0xFF14B57F).withValues(alpha: 0.2),
+                  blurRadius: 16, // Increased from 12
+                  offset: const Offset(0, 6), // Increased from 4
                 ),
               ],
             ),
-            child: const Icon(
-              Icons.medical_services_rounded,
-              color: Colors.white,
-              size: 26,
+            padding: const EdgeInsets.all(14), // Increased from 8
+            child: Image.asset(
+              'assets/images/logo.png',
+              fit: BoxFit.contain,
             ),
           ),
 
-          const SizedBox(width: 14),
+          const SizedBox(width: 16), // Increased from 14
 
           // App name
           const Expanded(
@@ -146,7 +139,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 Text(
                   'PharmaLens',
                   style: TextStyle(
-                    fontSize: 22,
+                    fontSize: 24, // Increased from 22
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF0A4D3C),
                     letterSpacing: -0.5,
@@ -155,7 +148,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 Text(
                   'Professional Scanner',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 13, // Increased from 12
                     fontWeight: FontWeight.w500,
                     color: Color(0xFF6B8B7F),
                     letterSpacing: 0.3,
@@ -292,13 +285,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: _PremiumScanCard(
               icon: Icons.receipt_long_rounded,
               title: 'Scan Invoice',
-              subtitle: 'Extract text from medical invoices',
-              gradient: LinearGradient(
+              subtitle: 'Extract data from invoices & receipts',
+              gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF0A4D3C).withValues(alpha: 0.05),
-                  const Color(0xFF14B57F).withValues(alpha: 0.05),
+                  Colors.white,
+                  Color(0xFFF8FDFB),
                 ],
               ),
               isPrimary: false,
@@ -309,9 +302,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     pageBuilder: (context, animation, secondaryAnimation) =>
                         const InvoiceScanScreen(),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                      return FadeTransition(opacity: animation, child: child);
+                      return FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.95, end: 1.0).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            ),
+                          ),
+                          child: child,
+                        ),
+                      );
                     },
-                    transitionDuration: const Duration(milliseconds: 300),
+                    transitionDuration: const Duration(milliseconds: 400),
                   ),
                 );
               },
@@ -325,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildFeaturesSection() {
     return SlideTransition(
       position: Tween<Offset>(
-        begin: const Offset(0, 0.2),
+        begin: const Offset(0, 0.3),
         end: Offset.zero,
       ).animate(CurvedAnimation(
         parent: _cardAnimation,

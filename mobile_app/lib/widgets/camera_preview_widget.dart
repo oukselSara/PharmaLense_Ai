@@ -278,35 +278,39 @@ class _PremiumDetectionPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final box = detectionBox.box;
-    
-    final cameraValue = cameraController.value;
-    final previewSize = cameraValue.previewSize;
-    
-    if (previewSize == null) return;
 
-    // Fix coordinate transformation
-    final imageWidth = previewSize.height;
-    final imageHeight = previewSize.width;
-    
-    final screenWidth = size.width;
-    final screenHeight = size.height;
-    
-    final scaleX = screenWidth / imageWidth;
-    final scaleY = screenHeight / imageHeight;
-    final scale = math.max(scaleX, scaleY);
-    
-    final scaledWidth = imageWidth * scale;
-    final scaledHeight = imageHeight * scale;
-    final offsetX = (screenWidth - scaledWidth) / 2;
-    final offsetY = (screenHeight - scaledHeight) / 2;
+    // CRITICAL FIX: Use actual camera image dimensions from detection result
+    // These are the dimensions of the image that was sent to the backend
+    final double capturedImageWidth = detectionBox.imageWidth.toDouble();
+    final double capturedImageHeight = detectionBox.imageHeight.toDouble();
 
-    final screenRect = Rect.fromLTRB(
-      box.x1 * scale + offsetX,
-      box.y1 * scale + offsetY,
-      box.x2 * scale + offsetX,
-      box.y2 * scale + offsetY,
-    );
+    // Get screen preview dimensions
+    final double screenWidth = size.width;
+    final double screenHeight = size.height;
 
+    // Calculate how the image is scaled to fit the screen (cover mode)
+    // The preview uses BoxFit.cover, so we scale to fill and crop
+    final double scaleX = screenWidth / capturedImageWidth;
+    final double scaleY = screenHeight / capturedImageHeight;
+    final double scale = math.max(scaleX, scaleY);  // Use max for cover mode
+
+    // Calculate the scaled image size and centering offset
+    final double scaledImageWidth = capturedImageWidth * scale;
+    final double scaledImageHeight = capturedImageHeight * scale;
+
+    // The image might extend beyond screen bounds, calculate the visible portion offset
+    final double offsetX = (screenWidth - scaledImageWidth) / 2;
+    final double offsetY = (screenHeight - scaledImageHeight) / 2;
+
+    // Transform bounding box coordinates from image space to screen space
+    final double screenX1 = (box.x1 * scale) + offsetX;
+    final double screenY1 = (box.y1 * scale) + offsetY;
+    final double screenX2 = (box.x2 * scale) + offsetX;
+    final double screenY2 = (box.y2 * scale) + offsetY;
+
+    final screenRect = Rect.fromLTRB(screenX1, screenY1, screenX2, screenY2);
+
+    // Clamp to visible screen bounds (in case box extends beyond)
     final clampedRect = Rect.fromLTRB(
       screenRect.left.clamp(0.0, screenWidth),
       screenRect.top.clamp(0.0, screenHeight),
@@ -316,7 +320,7 @@ class _PremiumDetectionPainter extends CustomPainter {
 
     // Draw detection box with premium style
     _drawPremiumBox(canvas, clampedRect);
-    
+
     if (labelDetected) {
       _drawConfidenceBadge(canvas, clampedRect);
       _drawSuccessIndicator(canvas, clampedRect);

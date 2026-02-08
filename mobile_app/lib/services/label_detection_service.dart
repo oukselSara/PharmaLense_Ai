@@ -20,6 +20,10 @@ class YoloLabelDetectionService {
 
     _isProcessing = true;
     try {
+      // Store camera image dimensions for coordinate mapping
+      final imageWidth = cameraImage.width;
+      final imageHeight = cameraImage.height;
+
       // Convert CameraImage to JPEG
       final jpegBytes = await _convertCameraImageToJpeg(cameraImage);
       if (jpegBytes == null) return null;
@@ -38,10 +42,13 @@ class YoloLabelDetectionService {
         ),
       );
 
-      // Set timeout for real-time performance
+      // Set timeout for real-time performance (increased for CPU backend)
       final response = await request.send().timeout(
-        const Duration(milliseconds: 500),
+        const Duration(milliseconds: 2000), // Increased from 500ms for CPU processing
         onTimeout: () {
+          if (kDebugMode) {
+            debugPrint('⏱️ Detection timeout after 2000ms');
+          }
           throw TimeoutException('Detection timeout');
         },
       );
@@ -52,6 +59,24 @@ class YoloLabelDetectionService {
 
         if (data["detected"] == true && data["box"] != null) {
           final box = List<int>.from(data["box"]);
+
+          // CRITICAL: Extract cropped image from response
+          // This contains ONLY pixels within the detection bounding box
+          File? croppedFile;
+          if (data["cropped_image"] != null) {
+            try {
+              final croppedBytes = base64.decode(data["cropped_image"]);
+              final tempDir = Directory.systemTemp;
+              final timestamp = DateTime.now().millisecondsSinceEpoch;
+              croppedFile = File('${tempDir.path}/cropped_label_$timestamp.jpg');
+              await croppedFile.writeAsBytes(croppedBytes);
+            } catch (e) {
+              if (kDebugMode) {
+                debugPrint('Error saving cropped image: $e');
+              }
+            }
+          }
+
           return DetectionResult(
             box: BoundingBox(
               x1: box[0],
@@ -60,6 +85,9 @@ class YoloLabelDetectionService {
               y2: box[3],
             ),
             confidence: (data["confidence"] ?? 0.0).toDouble(),
+            croppedImageFile: croppedFile,
+            imageWidth: imageWidth,
+            imageHeight: imageHeight,
           );
         }
       }
@@ -67,7 +95,8 @@ class YoloLabelDetectionService {
       return null;
     } catch (e) {
       if (kDebugMode) {
-        print('Error in live detection: $e');
+        debugPrint('❌ Error in live detection: $e');
+        debugPrint('Stack trace: ${StackTrace.current}');
       }
       return null;
     } finally {
@@ -209,10 +238,16 @@ class BoundingBox {
 class DetectionResult {
   final BoundingBox box;
   final double confidence;
+  final File? croppedImageFile; // CRITICAL: Pre-cropped image containing ONLY label pixels
+  final int imageWidth;  // Original camera image width
+  final int imageHeight; // Original camera image height
 
   DetectionResult({
     required this.box,
     required this.confidence,
+    this.croppedImageFile,
+    required this.imageWidth,
+    required this.imageHeight,
   });
 }
 

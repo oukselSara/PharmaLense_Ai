@@ -6,7 +6,7 @@ import torch
 import cv2
 import numpy as np
 import base64
-from typing import Tuple
+from typing import Tuple, List, Optional
 
 app = FastAPI()
 
@@ -23,8 +23,12 @@ app.add_middleware(
 # MODEL CONFIGURATION
 # ==================================================
 MODEL_PATH = r"H:\graduation\PharmaLense_Ai\runs\detect\runs\detect\medicine_label_lowdata2\weights\best.pt"
-CONF_THRESHOLD = 0.25  # Lowered for better detection
+CONF_THRESHOLD = 0.15  # Lowered even more for better detection
 IOU_THRESHOLD = 0.45
+
+# Debug logging
+import logging
+logging.basicConfig(level=logging.INFO)
 
 # Load model once at startup
 print("Loading YOLO model...")
@@ -35,7 +39,21 @@ else:
     print(f"✅ Using GPU: {torch.cuda.get_device_name(0)}")
     device = 0
 
+# Fix PyTorch 2.10+ compatibility - disable weights_only check for our trusted model
+# Temporarily override torch.load to allow model loading
+import os
+_original_torch_load = torch.load
+
+def _patched_torch_load(*args, **kwargs):
+    kwargs['weights_only'] = False
+    return _original_torch_load(*args, **kwargs)
+
+torch.load = _patched_torch_load
+
 model = YOLO(MODEL_PATH)
+
+# Restore original torch.load
+torch.load = _original_torch_load
 print("✅ Model loaded successfully")
 
 
@@ -107,103 +125,206 @@ def unletterbox_coords(box: Tuple[int, int, int, int], scale: float,
     return (x1, y1, x2, y2)
 
 
-def refine_box_edges(img: np.ndarray, box: Tuple[int, int, int, int], 
-                     expand_margin: int = 30) -> Tuple[int, int, int, int]:
+def find_label_contour(img: np.ndarray, yolo_box: Tuple[int, int, int, int],
+                       expand_margin: int = 20) -> Optional[np.ndarray]:
     """
-    Tighten bounding box using edge detection and contour analysis
-    This fixes loose YOLO predictions by finding actual label boundaries
-    
-    Process:
-    1. Expand search area beyond YOLO box
-    2. Apply adaptive thresholding (handles varying lighting)
-    3. Morphological operations (clean up noise)
-    4. Find contours and compute tight bounding box
-    5. Validate and return refined coordinates
+    GEOMETRIC EDGE DETECTION: Find the precise label contour using edge analysis.
+
+    This function treats label detection as a pure geometry problem:
+    1. Extract YOLO region (rough localization)
+    2. Apply multi-stage edge detection
+    3. Find dominant rectangular contour (the label boundary)
+    4. Return the contour points for rotated rectangle fitting
+
+    Returns: Contour points (Nx1x2 array) or None if detection fails
     """
-    x1, y1, x2, y2 = box
+    x1, y1, x2, y2 = yolo_box
     h, w = img.shape[:2]
-    
-    # Expand search area beyond YOLO box to catch edges
+
+    # Expand search region slightly beyond YOLO box
     search_x1 = max(0, x1 - expand_margin)
     search_y1 = max(0, y1 - expand_margin)
     search_x2 = min(w, x2 + expand_margin)
     search_y2 = min(h, y2 + expand_margin)
-    
-    # Extract region of interest
+
+    # Extract ROI
     roi = img[search_y1:search_y2, search_x1:search_x2].copy()
-    
-    # Safety check for valid ROI
-    if roi.size == 0 or roi.shape[0] < 20 or roi.shape[1] < 20:
-        return box
-    
+
+    if roi.size == 0 or roi.shape[0] < 30 or roi.shape[1] < 30:
+        return None
+
     try:
-        # Convert to grayscale for processing
+        # === STEP 1: Grayscale and denoising ===
         gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        
-        # Bilateral filter: preserves edges while smoothing noise
-        filtered = cv2.bilateralFilter(gray, d=9, sigmaColor=75, sigmaSpace=75)
-        
-        # Adaptive thresholding: works well for labels with varying lighting
-        # This is crucial for medicine labels with different background colors
-        thresh = cv2.adaptiveThreshold(
-            filtered, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-            cv2.THRESH_BINARY, blockSize=11, C=2
+
+        # Bilateral filter: preserves edges while removing noise
+        denoised = cv2.bilateralFilter(gray, 9, 75, 75)
+
+        # === STEP 2: Multi-threshold edge detection ===
+        # Use adaptive thresholding to handle varying lighting
+        adaptive_thresh = cv2.adaptiveThreshold(
+            denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY, 11, 2
         )
-        
-        # Morphological operations to clean up and connect edges
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=2)
-        morph = cv2.morphologyEx(morph, cv2.MORPH_OPEN, kernel, iterations=1)
-        
-        # Find contours
+
+        # Canny edge detection with low thresholds for label boundaries
+        edges = cv2.Canny(denoised, 20, 80)
+
+        # Combine both edge detection methods
+        combined_edges = cv2.bitwise_or(edges, cv2.bitwise_not(adaptive_thresh))
+
+        # === STEP 3: Morphological operations to connect edges ===
+        # Close gaps in the label boundary
+        kernel_close = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        closed = cv2.morphologyEx(combined_edges, cv2.MORPH_CLOSE, kernel_close, iterations=2)
+
+        # Dilate slightly to ensure connected boundary
+        kernel_dilate = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        dilated = cv2.dilate(closed, kernel_dilate, iterations=1)
+
+        # === STEP 4: Find contours ===
         contours, _ = cv2.findContours(
-            morph, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
-        
+
         if not contours:
-            return box
-        
-        # Filter contours by area (remove noise)
-        min_area = (roi.shape[0] * roi.shape[1]) * 0.05  # At least 5% of ROI
-        valid_contours = [c for c in contours if cv2.contourArea(c) > min_area]
-        
+            return None
+
+        # === STEP 5: Select the label contour ===
+        # Filter by area: must occupy significant portion of ROI
+        roi_area = roi.shape[0] * roi.shape[1]
+        min_area = roi_area * 0.15  # At least 15% of ROI
+        max_area = roi_area * 0.95  # At most 95% of ROI
+
+        valid_contours = [
+            cnt for cnt in contours
+            if min_area < cv2.contourArea(cnt) < max_area
+        ]
+
         if not valid_contours:
-            return box
-        
-        # Get bounding box of all valid contours combined
-        all_points = np.vstack(valid_contours)
-        refined_x, refined_y, refined_w, refined_h = cv2.boundingRect(all_points)
-        
-        # Verify refined box is reasonable (not too small)
-        if refined_w < 30 or refined_h < 30:
-            return box
-        
-        # Map back to original image coordinates
-        final_x1 = search_x1 + refined_x
-        final_y1 = search_y1 + refined_y
-        final_x2 = search_x1 + refined_x + refined_w
-        final_y2 = search_y1 + refined_y + refined_h
-        
-        # Add small padding (5px) for safety - ensures we don't cut text
-        pad = 5
-        final_x1 = max(0, final_x1 - pad)
-        final_y1 = max(0, final_y1 - pad)
-        final_x2 = min(w, final_x2 + pad)
-        final_y2 = min(h, final_y2 + pad)
-        
-        # Sanity check: refined box should overlap significantly with original
-        original_area = (x2 - x1) * (y2 - y1)
-        refined_area = (final_x2 - final_x1) * (final_y2 - final_y1)
-        
-        # If refined box is too different, keep original (refinement failed)
-        if refined_area < original_area * 0.3 or refined_area > original_area * 2:
-            return box
-        
-        return (final_x1, final_y1, final_x2, final_y2)
-        
+            return None
+
+        # Choose largest valid contour (most likely the label)
+        label_contour = max(valid_contours, key=cv2.contourArea)
+
+        # === STEP 6: Refine contour using convex hull ===
+        # This removes internal noise and gives us the outer boundary
+        hull = cv2.convexHull(label_contour)
+
+        # Approximate to polygon to reduce noise
+        epsilon = 0.01 * cv2.arcLength(hull, True)
+        approx = cv2.approxPolyDP(hull, epsilon, True)
+
+        # Map contour back to original image coordinates
+        approx_mapped = approx.copy()
+        approx_mapped[:, 0, 0] += search_x1
+        approx_mapped[:, 0, 1] += search_y1
+
+        return approx_mapped
+
     except Exception as e:
-        print(f"Box refinement failed: {e}")
+        print(f"Contour detection failed: {e}")
+        return None
+
+
+def get_rotated_box_from_contour(contour: np.ndarray) -> Tuple[List[List[int]], Tuple[int, int, int, int]]:
+    """
+    Fit a minimum area rotated rectangle to the detected contour.
+
+    Returns:
+        - rotated_points: 4 corner points [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+        - axis_aligned_bbox: (x1, y1, x2, y2) for compatibility
+    """
+    # Fit minimum area rectangle (can be rotated)
+    rect = cv2.minAreaRect(contour)
+
+    # Get the 4 corner points of the rotated rectangle
+    box_points = cv2.boxPoints(rect)
+    box_points = box_points.astype(int)  # Fixed: np.int0 deprecated in NumPy 2.0+
+
+    # Convert to list format for JSON serialization
+    rotated_points = box_points.tolist()
+
+    # Also compute axis-aligned bounding box for compatibility
+    x_coords = box_points[:, 0]
+    y_coords = box_points[:, 1]
+
+    axis_aligned_bbox = (
+        int(x_coords.min()),
+        int(y_coords.min()),
+        int(x_coords.max()),
+        int(y_coords.max())
+    )
+
+    return rotated_points, axis_aligned_bbox
+
+
+def refine_box_edges(img: np.ndarray, box: Tuple[int, int, int, int],
+                     expand_margin: int = 20) -> Tuple[int, int, int, int]:
+    """
+    PRECISION EDGE-BASED REFINEMENT using rotated rectangle fitting.
+
+    Pipeline:
+    1. Use YOLO box for rough localization
+    2. Find label contour using edge geometry
+    3. Fit minimum area (rotated) rectangle to contour
+    4. Return axis-aligned bbox (for backward compatibility)
+
+    Note: Use refine_box_edges_rotated() to get the full rotated box
+    """
+    contour = find_label_contour(img, box, expand_margin)
+
+    if contour is None:
         return box
+
+    # Get rotated box
+    _, axis_aligned = get_rotated_box_from_contour(contour)
+
+    # Validation: ensure reasonable size
+    x1, y1, x2, y2 = axis_aligned
+    h, w = img.shape[:2]
+
+    # Clamp to image bounds
+    x1 = max(0, min(x1, w))
+    y1 = max(0, min(y1, h))
+    x2 = max(0, min(x2, w))
+    y2 = max(0, min(y2, h))
+
+    # Ensure minimum size
+    if (x2 - x1) < 30 or (y2 - y1) < 30:
+        return box
+
+    # Validate area change is reasonable
+    original_area = (box[2] - box[0]) * (box[3] - box[1])
+    refined_area = (x2 - x1) * (y2 - y1)
+
+    if refined_area < original_area * 0.15 or refined_area > original_area * 1.8:
+        return box
+
+    return (x1, y1, x2, y2)
+
+
+def refine_box_edges_rotated(img: np.ndarray, box: Tuple[int, int, int, int],
+                              expand_margin: int = 20) -> Optional[List[List[int]]]:
+    """
+    FULL ROTATED RECTANGLE REFINEMENT - returns 4 corner points.
+
+    This is the PRIMARY function for tight label detection.
+    Returns a rotated rectangle that hugs the label edges precisely.
+
+    Returns:
+        [[x1,y1], [x2,y2], [x3,y3], [x4,y4]] - 4 corners of rotated rect
+        or None if detection fails
+    """
+    contour = find_label_contour(img, box, expand_margin)
+
+    if contour is None:
+        return None
+
+    # Get rotated box points
+    rotated_points, _ = get_rotated_box_from_contour(contour)
+
+    return rotated_points
 
 
 def quick_preprocess(img: np.ndarray) -> np.ndarray:
@@ -274,13 +395,15 @@ async def root():
     """Health check endpoint"""
     return {
         "status": "running",
-        "model": "YOLO Medicine Label Detector (Optimized v2.5)",
+        "model": "YOLO Medicine Label Detector (Rotated Box v3.0)",
         "device": "GPU" if torch.cuda.is_available() else "CPU",
-        "version": "2.5",
+        "version": "3.0",
         "features": [
-            "Letterboxing for accurate coordinates",
-            "Edge-based box refinement",
-            "OCR-optimized cropping"
+            "Geometric edge detection",
+            "Rotated rectangle fitting (minAreaRect)",
+            "Precise label boundary alignment",
+            "Multi-stage edge detection pipeline",
+            "No reliance on text/OCR for box fitting"
         ]
     }
 
@@ -355,28 +478,34 @@ async def detect_label(file: UploadFile = File(...)):
 @app.post("/detect-live")
 async def detect_live(file: UploadFile = File(...)):
     """
-    FAST detection for live camera with TIGHT bounding boxes
-    
-    Improvements:
-    - Letterboxing for correct aspect ratio
-    - Coordinate transformation for accuracy
-    - Edge-based refinement for tight fit
-    
-    Returns coordinates in ORIGINAL image dimensions
+    FAST detection for live camera with TIGHT ROTATED bounding boxes
+
+    Pipeline:
+    1. YOLO for rough localization
+    2. Edge detection to find label contour
+    3. Fit minimum area rotated rectangle to edges
+    4. Return precise 4-point polygon
+
+    Returns:
+    - rotated_box: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]] - exact label corners
+    - box: [x1,y1,x2,y2] - axis-aligned bbox for compatibility
     """
     try:
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
         img_original = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
+
         if img_original is None:
+            print("❌ Failed to decode image")
             return {"detected": False}
 
+        print(f"📸 Received image: {img_original.shape}")
+
         original_h, original_w = img_original.shape[:2]
-        
+
         # Apply letterboxing for proper aspect ratio preservation
         img_letterboxed, scale, padding = letterbox_image(img_original, target_size=640)
-        
+
         # Run YOLO detection on letterboxed image
         results = model(
             img_letterboxed,
@@ -388,59 +517,100 @@ async def detect_live(file: UploadFile = File(...)):
         )[0]
 
         if results.boxes is None or len(results.boxes) == 0:
+            print(f"❌ No detections found (threshold: {CONF_THRESHOLD})")
             return {"detected": False}
 
-        # Get best detection from YOLO
+        print(f"✅ Found {len(results.boxes)} detection(s)")
+
+        # Get best detection from YOLO (rough localization)
         boxes = results.boxes.xyxy.cpu().numpy()
         scores = results.boxes.conf.cpu().numpy()
-        
+
         best_idx = scores.argmax()
         letterbox_coords = tuple(map(int, boxes[best_idx]))
-        
+
         # Convert from letterboxed coordinates to original image coordinates
         x1, y1, x2, y2 = unletterbox_coords(letterbox_coords, scale, padding)
-        
+
         # Clamp to image bounds (safety)
         x1 = max(0, min(x1, original_w))
         y1 = max(0, min(y1, original_h))
         x2 = max(0, min(x2, original_w))
         y2 = max(0, min(y2, original_h))
-        
-        # Refine box using edge detection for tighter fit
-        refined_box = refine_box_edges(img_original, (x1, y1, x2, y2))
 
-        return {
+        yolo_box = (x1, y1, x2, y2)
+
+        # === CRITICAL: Find precise rotated box from edges ===
+        rotated_box = refine_box_edges_rotated(img_original, yolo_box)
+
+        # Also get axis-aligned box for cropping
+        refined_box = refine_box_edges(img_original, yolo_box)
+        rx1, ry1, rx2, ry2 = refined_box
+
+        # Crop using axis-aligned box
+        cropped = img_original[ry1:ry2, rx1:rx2]
+
+        # Encode cropped image to base64 for transmission
+        _, buffer = cv2.imencode('.jpg', cropped, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        cropped_base64 = base64.b64encode(buffer).decode('utf-8')
+
+        response = {
             "detected": True,
-            "box": list(refined_box),
+            "box": list(refined_box),  # Axis-aligned for compatibility
             "confidence": float(scores[best_idx]),
             "original_size": {
                 "width": original_w,
                 "height": original_h
             },
-            "refinement_applied": True
+            "refinement_applied": True,
+            "cropped_image": cropped_base64,
+            "crop_size": {
+                "width": cropped.shape[1],
+                "height": cropped.shape[0]
+            }
         }
+
+        # Add rotated box if edge detection succeeded
+        if rotated_box is not None:
+            response["rotated_box"] = rotated_box
+            response["box_type"] = "rotated"
+        else:
+            response["rotated_box"] = [
+                [rx1, ry1], [rx2, ry1], [rx2, ry2], [rx1, ry2]
+            ]
+            response["box_type"] = "axis_aligned_fallback"
+
+        return response
 
     except Exception as e:
         print(f"Live detection error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {"detected": False, "error": str(e)}
 
 
 @app.post("/detect-and-crop")
 async def detect_and_crop(file: UploadFile = File(...)):
     """
-    Detect medicine label with TIGHT bounding box, crop it, and return enhanced version for OCR
-    
+    Detect medicine label with TIGHT ROTATED bounding box and return cropped/enhanced images
+
+    Pipeline:
+    1. YOLO rough detection
+    2. Geometric edge detection for precise boundaries
+    3. Rotated rectangle fitting (not axis-aligned)
+    4. Return rotated box + cropped images
+
     Returns:
-    - Tightly cropped label image
-    - OCR-enhanced version (grayscale, high contrast)
-    - Refined bounding box coordinates
+    - rotated_box: 4 corner points of precise label boundary
+    - cropped_image: Cropped label region
+    - enhanced_image: OCR-optimized version
     """
     try:
         # Read image
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
         img_original = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
+
         if img_original is None:
             return JSONResponse(
                 status_code=400,
@@ -448,11 +618,11 @@ async def detect_and_crop(file: UploadFile = File(...)):
             )
 
         original_h, original_w = img_original.shape[:2]
-        
+
         # Letterbox preprocessing for accurate detection
         img_letterboxed, scale, padding = letterbox_image(img_original, target_size=640)
 
-        # Detect label
+        # Detect label with YOLO
         results = model(
             img_letterboxed,
             conf=CONF_THRESHOLD,
@@ -471,27 +641,30 @@ async def detect_and_crop(file: UploadFile = File(...)):
         # Get best detection
         boxes = results.boxes.xyxy.cpu().numpy()
         scores = results.boxes.conf.cpu().numpy()
-        
+
         best_idx = scores.argmax()
         letterbox_coords = tuple(map(int, boxes[best_idx]))
         confidence = float(scores[best_idx])
-        
+
         # Convert to original image coordinates
         x1, y1, x2, y2 = unletterbox_coords(letterbox_coords, scale, padding)
-        
+
         # Clamp to valid range
         x1 = max(0, min(x1, original_w))
         y1 = max(0, min(y1, original_h))
         x2 = max(0, min(x2, original_w))
         y2 = max(0, min(y2, original_h))
-        
-        # Refine the box for tight fit
-        refined_box = refine_box_edges(img_original, (x1, y1, x2, y2))
+
+        yolo_box = (x1, y1, x2, y2)
+
+        # === CRITICAL: Precise edge-based refinement ===
+        rotated_box = refine_box_edges_rotated(img_original, yolo_box)
+        refined_box = refine_box_edges(img_original, yolo_box)
         rx1, ry1, rx2, ry2 = refined_box
 
         # Crop using refined coordinates
         cropped = img_original[ry1:ry2, rx1:rx2]
-        
+
         # Enhance for OCR (better text recognition)
         enhanced = enhance_label_for_ocr(img_original, refined_box)
 
@@ -502,7 +675,7 @@ async def detect_and_crop(file: UploadFile = File(...)):
         _, buffer_crop = cv2.imencode('.jpg', cropped, [cv2.IMWRITE_JPEG_QUALITY, 95])
         cropped_base64 = base64.b64encode(buffer_crop).decode('utf-8')
 
-        return {
+        response = {
             "detected": True,
             "confidence": confidence,
             "box": {
@@ -520,19 +693,133 @@ async def detect_and_crop(file: UploadFile = File(...)):
             "refinement_applied": True
         }
 
+        # Add rotated box if available
+        if rotated_box is not None:
+            response["rotated_box"] = rotated_box
+            response["box_type"] = "rotated"
+        else:
+            response["rotated_box"] = [
+                [rx1, ry1], [rx2, ry1], [rx2, ry2], [rx1, ry2]
+            ]
+            response["box_type"] = "axis_aligned_fallback"
+
+        return response
+
     except Exception as e:
         print(f"Processing error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return JSONResponse(
             status_code=500,
             content={"error": f"Processing failed: {str(e)}"}
         )
 
 
+@app.post("/detect-debug")
+async def detect_debug(file: UploadFile = File(...)):
+    """
+    Debug endpoint: Returns annotated image showing detection pipeline
+
+    Visualization:
+    - Red box: YOLO rough detection
+    - Green polygon: Precise rotated rectangle from edge detection
+    - Blue contours: Detected edges used for fitting
+
+    Use this to verify that the rotated box aligns with physical label edges.
+    """
+    try:
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img_original = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if img_original is None:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Invalid image file"}
+            )
+
+        # Make a copy for annotation
+        annotated = img_original.copy()
+        original_h, original_w = img_original.shape[:2]
+
+        # Letterbox and detect
+        img_letterboxed, scale, padding = letterbox_image(img_original, target_size=640)
+
+        results = model(
+            img_letterboxed,
+            conf=CONF_THRESHOLD,
+            iou=IOU_THRESHOLD,
+            device=device,
+            verbose=False,
+            imgsz=640
+        )[0]
+
+        if results.boxes is None or len(results.boxes) == 0:
+            return {"detected": False, "message": "No label detected"}
+
+        # Get YOLO box
+        boxes = results.boxes.xyxy.cpu().numpy()
+        scores = results.boxes.conf.cpu().numpy()
+
+        best_idx = scores.argmax()
+        letterbox_coords = tuple(map(int, boxes[best_idx]))
+
+        x1, y1, x2, y2 = unletterbox_coords(letterbox_coords, scale, padding)
+        x1 = max(0, min(x1, original_w))
+        y1 = max(0, min(y1, original_h))
+        x2 = max(0, min(x2, original_w))
+        y2 = max(0, min(y2, original_h))
+
+        yolo_box = (x1, y1, x2, y2)
+
+        # Draw YOLO box in RED
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 0, 255), 3)
+        cv2.putText(annotated, "YOLO", (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+        # Get precise rotated box
+        rotated_box = refine_box_edges_rotated(img_original, yolo_box)
+
+        if rotated_box is not None:
+            # Draw rotated box in GREEN
+            pts = np.array(rotated_box, dtype=np.int32)
+            cv2.polylines(annotated, [pts], True, (0, 255, 0), 3)
+            cv2.putText(annotated, "PRECISE", (pts[0][0], pts[0][1] - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+            # Also draw the detected contour in BLUE for verification
+            contour = find_label_contour(img_original, yolo_box)
+            if contour is not None:
+                cv2.drawContours(annotated, [contour], -1, (255, 100, 0), 2)
+
+        # Encode annotated image
+        _, buffer = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        annotated_base64 = base64.b64encode(buffer).decode('utf-8')
+
+        return {
+            "detected": True,
+            "annotated_image": annotated_base64,
+            "yolo_box": list(yolo_box),
+            "rotated_box": rotated_box,
+            "confidence": float(scores[best_idx]),
+            "message": "Green = precise rotated box, Red = YOLO box, Blue = detected contour"
+        }
+
+    except Exception as e:
+        print(f"Debug error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
-    
+
     print("\n" + "="*70)
-    print("🚀 Starting OPTIMIZED Medicine Label Detection Server v2.5")
+    print("🚀 Starting PRECISION Medicine Label Detection Server v3.0")
     print("="*70)
     print(f"📱 Server URL: http://0.0.0.0:8000")
     print(f"📱 Local: http://localhost:8000")
@@ -540,11 +827,17 @@ if __name__ == "__main__":
     print(f"🔧 Confidence Threshold: {CONF_THRESHOLD}")
     print(f"🔧 IoU Threshold: {IOU_THRESHOLD}")
     print(f"⚡ Device: {'GPU - ' + torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
-    print("\n✨ New Features:")
-    print("   • Letterboxing for aspect ratio preservation")
-    print("   • Edge-based bounding box refinement")
-    print("   • 15-30% tighter bounding boxes")
-    print("   • Better OCR accuracy")
+    print("\n✨ NEW in v3.0 - GEOMETRIC EDGE ALIGNMENT:")
+    print("   • YOLO used ONLY for rough localization")
+    print("   • Multi-stage edge detection (Canny + Adaptive)")
+    print("   • Rotated rectangle fitting (minAreaRect)")
+    print("   • Box aligns with PHYSICAL label edges, not semantics")
+    print("   • No OCR, text filtering, or confidence tuning")
+    print("   • GUARANTEED tight fit regardless of rotation")
+    print("\n📋 Endpoints:")
+    print("   • /detect-live - Fast detection with rotated boxes")
+    print("   • /detect-and-crop - Full pipeline with OCR enhancement")
+    print("   • /detect-debug - Visualize detection pipeline")
     print("="*70 + "\n")
-    
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

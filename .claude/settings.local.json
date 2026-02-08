@@ -3,7 +3,29 @@
     "allow": [
       "mcp__ide__getDiagnostics",
       "Bash(dart fix:*)",
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "Bash(python:*)",
+      "Bash(timeout 5 tail:*)",
+      "Bash(exit 0)",
+      "Bash(timeout 8 tail:*)",
+      "Bash(.venvScriptspython.exe -c \"import ultralytics; print\\(ultralytics.__version__\\); import torch; print\\(f''PyTorch: {torch.__version__}''\\)\")",
+      "Bash(\".venv\\\\Scripts\\\\python.exe\" -c \"import ultralytics; print\\(ultralytics.__version__\\); import torch; print\\(f''PyTorch: {torch.__version__}''\\)\")",
+      "Bash(timeout 10 tail:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(flutter devices:*)",
+      "Bash(ipconfig:*)",
+      "Bash(flutter run:*)",
+      "Bash(timeout 15 tail:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(flutter clean:*)",
+      "Bash(flutter build:*)",
+      "Bash(flutter pub outdated:*)",
+      "Bash(flutter pub upgrade:*)",
+      "Bash(test:*)",
+      "Bash(curl:*)",
+      "Bash(ls:*)"
     ]
   }
 }

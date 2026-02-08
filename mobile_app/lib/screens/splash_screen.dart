@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'home_screen.dart';
 
-/// Premium luxury splash screen with sophisticated animations
+/// Premium luxury splash screen with PharmaLense logo
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -73,8 +73,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     _fadeController.forward();
     _scaleController.forward();
 
-    // Navigate after delay
-    Timer(const Duration(milliseconds: 2800), () {
+    // Navigate after delay - reduced for faster startup
+    Timer(const Duration(milliseconds: 1500), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
@@ -85,7 +85,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                 child: child,
               );
             },
-            transitionDuration: const Duration(milliseconds: 600),
+            transitionDuration: const Duration(milliseconds: 300),
           ),
         );
       }
@@ -148,20 +148,13 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Premium logo container
+                          // Premium logo container with bigger size
                           Container(
-                            width: 140,
-                            height: 140,
+                            width: 240,  // Increased from 160
+                            height: 240, // Increased from 160
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Colors.white.withValues(alpha: 0.95),
-                                  Colors.white.withValues(alpha: 0.85),
-                                ],
-                              ),
+                              color: Colors.white,
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.15),
@@ -189,7 +182,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                         end: Alignment.bottomRight,
                                         colors: [
                                           Colors.transparent,
-                                          Colors.white.withValues(alpha: 0.3),
+                                          Colors.white.withValues(alpha: 0.2),
                                           Colors.transparent,
                                         ],
                                         stops: const [0.0, 0.5, 1.0],
@@ -202,11 +195,13 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                   ),
                                 ),
                                 
-                                // Medical cross icon
-                                const Icon(
-                                  Icons.medical_services_rounded,
-                                  size: 70,
-                                  color: Color(0xFF0A4D3C),
+                                // Actual logo image with more padding for better visibility
+                                Padding(
+                                  padding: const EdgeInsets.all(40), // Increased from 30
+                                  child: Image.asset(
+                                    'assets/images/logo.png',
+                                    fit: BoxFit.contain,
+                                  ),
                                 ),
                               ],
                             ),
