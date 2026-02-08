@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -7,7 +8,7 @@ import '../models/scanned_label.dart';
 import '../widgets/camera_preview_widget.dart';
 import 'confirmation_screen.dart';
 
-/// Camera screen with automatic YOLO-based label detection, flashlight, and image upload
+/// Premium camera screen with luxury design
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
 
@@ -15,22 +16,39 @@ class CameraScreen extends StatefulWidget {
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
+class _CameraScreenState extends State<CameraScreen>
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   bool _isInitializing = true;
   bool _isFlashlightOn = false;
   final ImagePicker _imagePicker = ImagePicker();
   bool _isProcessingImage = false;
 
+  late AnimationController _buttonController;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    
+    _buttonController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+
     _initializeCamera();
+
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
+    );
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _buttonController.dispose();
     super.dispose();
   }
 
@@ -56,7 +74,6 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       });
 
       if (initialized) {
-        // Check if server is connected and show info
         if (!cameraService.serverConnected) {
           _showServerOfflineDialog();
         }
@@ -69,35 +86,110 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   void _showServerOfflineDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.warning, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('Detection Server Offline'),
-          ],
-        ),
-        content: const Text(
-          'The AI detection server is not available. '
-          'The app will use manual positioning mode instead.\n\n'
-          'To enable automatic detection:\n'
-          '1. Start the Python backend server\n'
-          '2. Restart the app',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              // Try to reconnect
-              await context.read<CameraService>().retryServerConnection();
-            },
-            child: const Text('Retry Connection'),
+      barrierColor: Colors.black.withOpacity(0.7),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Continue'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF4E6),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.cloud_off_rounded,
+                  color: Color(0xFFFF9800),
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Server Offline',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0A4D3C),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'The AI detection server is not available. The app will use manual positioning mode instead.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                  color: Color(0xFF6B8B7F),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await context.read<CameraService>().retryServerConnection();
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Retry',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF14B57F),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF14B57F),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Continue',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -108,15 +200,33 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   }
 
   void _onLabelDetected(ScannedLabel label) {
-    // Navigate to confirmation screen
+    HapticFeedback.mediumImpact();
+    
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => ConfirmationScreen(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            PremiumConfirmationScreen(
           scannedLabel: label,
           onConfirm: _onConfirm,
           onRetry: _onRetry,
         ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.1),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              )),
+              child: child,
+            ),
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 400),
       ),
     );
   }
@@ -124,17 +234,35 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   void _onConfirm(ScannedLabel label) {
     Navigator.pop(context);
     
+    HapticFeedback.lightImpact();
+    
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          'Label saved: ${label.text.substring(0, label.text.length > 30 ? 30 : label.text.length)}...',
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Label saved successfully',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
-        backgroundColor: Colors.green,
+        backgroundColor: const Color(0xFF14B57F),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
         duration: const Duration(seconds: 2),
+        margin: const EdgeInsets.all(16),
       ),
     );
 
-    // Resume scanning
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         _startScanning();
@@ -147,12 +275,12 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     _startScanning();
   }
 
-  /// Toggle flashlight on/off
   Future<void> _toggleFlashlight() async {
     final cameraService = context.read<CameraService>();
     
     try {
       await cameraService.toggleFlashlight();
+      HapticFeedback.lightImpact();
       setState(() {
         _isFlashlightOn = !_isFlashlightOn;
       });
@@ -160,26 +288,28 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to toggle flashlight: $e'),
-            backgroundColor: Colors.red,
+            content: Text('Failed to toggle flashlight'),
+            backgroundColor: const Color(0xFFEF5350),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
           ),
         );
       }
     }
   }
 
-  /// Pick image from gallery and process it
   Future<void> _pickImageFromGallery() async {
     try {
       setState(() {
         _isProcessingImage = true;
       });
 
-      // Stop scanning while processing image
       final cameraService = context.read<CameraService>();
       await cameraService.stopScanning();
 
-      // Pick image
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 85,
@@ -189,34 +319,52 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         setState(() {
           _isProcessingImage = false;
         });
-        // Resume scanning
         _startScanning();
         return;
       }
 
-      // Show processing dialog
       if (mounted) {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => const AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: Colors.green),
-                SizedBox(height: 16),
-                Text('Processing image...'),
-              ],
+          barrierColor: Colors.black.withOpacity(0.7),
+          builder: (context) => Center(
+            child: Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF14B57F),
+                      strokeWidth: 4,
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                  Text(
+                    'Processing image...',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0A4D3C),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
       }
 
-      // Process the image
       final imageFile = File(image.path);
       final scannedLabel = await cameraService.processUploadedImage(imageFile);
 
-      // Close processing dialog
       if (mounted) {
         Navigator.pop(context);
       }
@@ -226,29 +374,20 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       });
 
       if (scannedLabel != null && scannedLabel.hasValidText) {
-        // Show confirmation screen
         if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ConfirmationScreen(
-                scannedLabel: scannedLabel,
-                onConfirm: _onConfirm,
-                onRetry: () {
-                  Navigator.pop(context);
-                  _pickImageFromGallery(); // Let user pick another image
-                },
-              ),
-            ),
-          );
+          _onLabelDetected(scannedLabel);
         }
       } else {
-        // No text found
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No text detected in image. Please try another photo.'),
-              backgroundColor: Colors.orange,
+            SnackBar(
+              content: const Text('No text detected in image'),
+              backgroundColor: const Color(0xFFFF9800),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              margin: const EdgeInsets.all(16),
             ),
           );
           _startScanning();
@@ -260,11 +399,16 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       });
 
       if (mounted) {
-        Navigator.pop(context); // Close loading dialog if open
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error processing image: $e'),
-            backgroundColor: Colors.red,
+            content: Text('Error processing image'),
+            backgroundColor: const Color(0xFFEF5350),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
           ),
         );
         _startScanning();
@@ -275,90 +419,188 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.green,
-        title: const Text(
-          'AI Label Scanner',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: Container(
+          margin: const EdgeInsets.only(left: 16),
+          child: IconButton(
+            icon: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 1,
+                ),
+              ),
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        title: Text(
+          'Scan Medicine',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+            shadows: [
+              Shadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 8,
+              ),
+            ],
+          ),
         ),
         actions: [
-          // Server status indicator
           Consumer<CameraService>(
             builder: (context, cameraService, child) {
-              return IconButton(
-                icon: Icon(
-                  cameraService.serverConnected 
-                      ? Icons.cloud_done 
-                      : Icons.cloud_off,
-                  color: cameraService.serverConnected 
-                      ? Colors.white 
-                      : Colors.orange,
+              return Container(
+                margin: const EdgeInsets.only(right: 16),
+                child: IconButton(
+                  icon: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: cameraService.serverConnected
+                          ? const Color(0xFF14B57F).withOpacity(0.3)
+                          : const Color(0xFFFF9800).withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      cameraService.serverConnected
+                          ? Icons.cloud_done_rounded
+                          : Icons.cloud_off_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  onPressed: () async {
+                    if (!cameraService.serverConnected) {
+                      await cameraService.retryServerConnection();
+                    }
+                  },
                 ),
-                onPressed: () async {
-                  if (!cameraService.serverConnected) {
-                    await cameraService.retryServerConnection();
-                  } else {
-                    _showInfoDialog();
-                  }
-                },
-                tooltip: cameraService.serverConnected 
-                    ? 'AI Detection Active' 
-                    : 'Server Offline - Tap to retry',
               );
             },
-          ),
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: _showInfoDialog,
           ),
         ],
       ),
       body: _isInitializing
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(color: Colors.green),
-                  SizedBox(height: 16),
-                  Text(
-                    'Initializing AI detection...',
-                    style: TextStyle(fontSize: 16),
-                  ),
-                ],
+          ? Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF0A4D3C),
+                    Color(0xFF14B57F),
+                  ],
+                ),
+              ),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 4,
+                      ),
+                    ),
+                    SizedBox(height: 24),
+                    Text(
+                      'Initializing AI detection...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             )
           : Consumer<CameraService>(
               builder: (context, cameraService, child) {
                 if (!cameraService.isInitialized) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.camera_alt_outlined,
-                          size: 64,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          cameraService.statusMessage,
-                          style: const TextStyle(fontSize: 16),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton(
-                          onPressed: _initializeCamera,
-                          child: const Text('Retry'),
-                        ),
-                      ],
+                  return Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0xFF0A4D3C),
+                          Color(0xFF14B57F),
+                        ],
+                      ),
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.camera_alt_outlined,
+                            size: 64,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            cameraService.statusMessage,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton(
+                            onPressed: _initializeCamera,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF0A4D3C),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 32,
+                                vertical: 16,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'Retry',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }
 
                 return Stack(
                   children: [
-                    // Camera preview with detection
-                    CameraPreviewWidget(
+                    // Camera preview
+                    PremiumCameraPreviewWidget(
                       cameraController: cameraService.cameraController!,
                       isScanning: cameraService.isScanning,
                       labelDetected: cameraService.labelDetected,
@@ -366,7 +608,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                       detectionBox: cameraService.currentDetection,
                     ),
 
-                    // Control buttons overlay
+                    // Control buttons
                     _buildControlButtons(),
                   ],
                 );
@@ -375,146 +617,109 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     );
   }
 
-  /// Build control buttons (flashlight, upload)
   Widget _buildControlButtons() {
     return Positioned(
-      right: 16,
-      bottom: 100,
+      right: 20,
+      bottom: 40,
       child: Column(
         children: [
-          // Upload image button
-          FloatingActionButton(
-            heroTag: 'upload',
+          // Upload button
+          _PremiumActionButton(
+            icon: Icons.photo_library_rounded,
+            isActive: false,
+            isProcessing: _isProcessingImage,
             onPressed: _isProcessingImage ? null : _pickImageFromGallery,
-            backgroundColor: Colors.blue,
-            tooltip: 'Upload Image',
-            child: _isProcessingImage 
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : const Icon(Icons.photo_library, size: 28),
           ),
 
           const SizedBox(height: 16),
 
-          // Flashlight toggle button
-          FloatingActionButton(
-            heroTag: 'flashlight',
+          // Flashlight button
+          _PremiumActionButton(
+            icon: _isFlashlightOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+            isActive: _isFlashlightOn,
             onPressed: _toggleFlashlight,
-            backgroundColor: _isFlashlightOn ? Colors.yellow : Colors.white,
-            tooltip: _isFlashlightOn ? 'Turn off flashlight' : 'Turn on flashlight',
-            child: Icon(
-              _isFlashlightOn ? Icons.flash_on : Icons.flash_off,
-              color: _isFlashlightOn ? Colors.black : Colors.grey[700],
-              size: 28,
-            ),
           ),
         ],
       ),
     );
   }
+}
 
-  void _showInfoDialog() {
-    final cameraService = context.read<CameraService>();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('AI Label Scanner'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildInfoRow(
-              icon: Icons.auto_awesome,
-              title: 'Automatic Detection',
-              description: 'AI finds labels automatically',
-            ),
-            const SizedBox(height: 12),
-            _buildInfoRow(
-              icon: cameraService.serverConnected 
-                  ? Icons.cloud_done 
-                  : Icons.cloud_off,
-              title: cameraService.serverConnected 
-                  ? 'Server Connected' 
-                  : 'Server Offline',
-              description: cameraService.serverConnected
-                  ? 'YOLO detection is active'
-                  : 'Using manual mode',
-              iconColor: cameraService.serverConnected 
-                  ? Colors.green 
-                  : Colors.orange,
-            ),
-            const SizedBox(height: 12),
-            _buildInfoRow(
-              icon: Icons.flash_on,
-              title: 'Flashlight',
-              description: 'Toggle for better visibility',
-            ),
-            const SizedBox(height: 12),
-            _buildInfoRow(
-              icon: Icons.photo_library,
-              title: 'Upload Image',
-              description: 'Process saved photos',
-            ),
-          ],
-        ),
-        actions: [
-          if (!cameraService.serverConnected)
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await cameraService.retryServerConnection();
-              },
-              child: const Text('Retry Server'),
-            ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Got it'),
-          ),
-        ],
-      ),
-    );
-  }
+/// Premium action button widget
+class _PremiumActionButton extends StatefulWidget {
+  final IconData icon;
+  final bool isActive;
+  final bool isProcessing;
+  final VoidCallback? onPressed;
 
-  Widget _buildInfoRow({
-    required IconData icon,
-    required String title,
-    required String description,
-    Color? iconColor,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: iconColor ?? Colors.green, size: 24),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              Text(
-                description,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey[600],
-                ),
+  const _PremiumActionButton({
+    required this.icon,
+    this.isActive = false,
+    this.isProcessing = false,
+    this.onPressed,
+  });
+
+  @override
+  State<_PremiumActionButton> createState() => _PremiumActionButtonState();
+}
+
+class _PremiumActionButtonState extends State<_PremiumActionButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: widget.onPressed != null ? (_) => setState(() => _isPressed = true) : null,
+      onTapUp: widget.onPressed != null
+          ? (_) {
+              setState(() => _isPressed = false);
+              HapticFeedback.lightImpact();
+              widget.onPressed?.call();
+            }
+          : null,
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.9 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: widget.isActive
+                ? const Color(0xFFFFC107)
+                : Colors.white.withOpacity(0.95),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: widget.isActive
+                  ? Colors.white.withOpacity(0.3)
+                  : Colors.black.withOpacity(0.05),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
+          child: widget.isProcessing
+              ? Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: CircularProgressIndicator(
+                    color: const Color(0xFF14B57F),
+                    strokeWidth: 3,
+                  ),
+                )
+              : Icon(
+                  widget.icon,
+                  color: widget.isActive
+                      ? Colors.black87
+                      : const Color(0xFF0A4D3C),
+                  size: 28,
+                ),
         ),
-      ],
+      ),
     );
   }
 }

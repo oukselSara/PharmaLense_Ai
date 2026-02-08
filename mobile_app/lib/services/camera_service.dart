@@ -140,9 +140,7 @@ class CameraService extends ChangeNotifier {
         _currentFrame = image;
       });
     } catch (e) {
-      if (kDebugMode) {
-        print('Error starting image stream: $e');
-      }
+      print('Error starting image stream: $e');
     }
   }
 
@@ -203,9 +201,7 @@ class CameraService extends ChangeNotifier {
         await _processFrameWithOcr(image, onLabelDetected);
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Error processing frame: $e');
-      }
+      print('Error processing frame: $e');
     } finally {
       _isProcessingFrame = false;
     }
@@ -242,9 +238,7 @@ class CameraService extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Error in OCR: $e');
-      }
+      print('Error in OCR: $e');
       _updateStatus('❌ OCR failed, retrying...');
       _labelDetected = false;
       _currentDetection = null;
@@ -288,9 +282,7 @@ class CameraService extends ChangeNotifier {
         }
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Error in OCR fallback: $e');
-      }
+      print('Error in OCR fallback: $e');
     }
   }
 

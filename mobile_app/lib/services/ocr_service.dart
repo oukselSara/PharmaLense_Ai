@@ -8,48 +8,69 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 
 import '../models/scanned_label.dart';
 
-/// Service class for handling OCR operations using Google ML Kit
+/// Optimized OCR service - fast and doesn't freeze
 class OcrService {
   late final TextRecognizer _textRecognizer;
   bool _isProcessing = false;
 
   OcrService() {
-    // Initialize the text recognizer
     _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
   }
 
-  /// Process an image file from gallery/storage
+  /// Process an image file with lightweight preprocessing
   Future<ScannedLabel?> processImageFile(File imageFile) async {
     if (_isProcessing) return null;
 
     _isProcessing = true;
     try {
-      // Read image file
       final imageBytes = await imageFile.readAsBytes();
       final image = img.decodeImage(imageBytes);
       
       if (image == null) return null;
 
-      // Create InputImage from file
-      final inputImage = InputImage.fromFilePath(imageFile.path);
+      // Try only 2 methods to avoid freezing
+      final tempDir = Directory.systemTemp;
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      
+      final results = <_OcrResult>[];
 
-      // Perform text recognition
-      final RecognizedText recognizedText =
-          await _textRecognizer.processImage(inputImage);
+      // Method 1: Original with light enhancement
+      final enhanced = _lightEnhance(image);
+      final enhancedFile = File('${tempDir.path}/enhanced_$timestamp.jpg');
+      await enhancedFile.writeAsBytes(img.encodeJpg(enhanced, quality: 90));
+      
+      final result1 = await _performOcr(enhancedFile.path);
+      if (result1 != null) results.add(result1);
+      
+      // Method 2: High contrast
+      final contrasted = _highContrast(image);
+      final contrastFile = File('${tempDir.path}/contrast_$timestamp.jpg');
+      await contrastFile.writeAsBytes(img.encodeJpg(contrasted, quality: 90));
+      
+      final result2 = await _performOcr(contrastFile.path);
+      if (result2 != null) results.add(result2);
 
-      // Extract text
-      final String extractedText = _extractTextFromBlocks(recognizedText);
-
-      // Detect dominant color
-      final String dominantColor = _detectDominantColor(image);
-
-      if (extractedText.trim().isEmpty) {
-        return null;
+      // Cleanup
+      try {
+        await enhancedFile.delete();
+        await contrastFile.delete();
+      } catch (e) {
+        if (kDebugMode) print('Error deleting temp files: $e');
       }
 
-      // Create and return ScannedLabel model with color
+      if (results.isEmpty) return null;
+
+      // Pick best result
+      results.sort((a, b) => b.text.length.compareTo(a.text.length));
+      final bestResult = results.first;
+
+      if (bestResult.text.trim().isEmpty) return null;
+
+      // Detect color
+      final String dominantColor = _detectDominantColor(image);
+
       return ScannedLabel(
-        text: extractedText,
+        text: bestResult.text,
         timestamp: DateTime.now(),
         imagePath: imageFile.path,
         dominantColor: dominantColor,
@@ -64,57 +85,47 @@ class OcrService {
     }
   }
 
-  /// Process a camera image and extract text with color detection
+  /// Process camera image - FAST method to avoid freezing
   Future<ScannedLabel?> processImageWithColor(CameraImage cameraImage) async {
     if (_isProcessing) return null;
 
     _isProcessing = true;
     try {
-      // Convert CameraImage to img.Image for both OCR and color detection
       final image = await _convertCameraImageToImage(cameraImage);
       if (image == null) return null;
 
-      // Save as temporary file for ML Kit
+      // Save temporary file - only ONE preprocessing method
       final tempDir = Directory.systemTemp;
-      final tempFile = File(
-          '${tempDir.path}/frame_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await tempFile.writeAsBytes(img.encodeJpg(image));
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      
+      // Use only light enhancement to avoid freezing
+      final enhanced = _lightEnhance(image);
+      final tempFile = File('${tempDir.path}/frame_$timestamp.jpg');
+      await tempFile.writeAsBytes(img.encodeJpg(enhanced, quality: 85));
 
-      // Create InputImage from file
-      final inputImage = InputImage.fromFilePath(tempFile.path);
+      // Perform OCR
+      final result = await _performOcr(tempFile.path);
 
-      // Perform text recognition
-      final RecognizedText recognizedText =
-          await _textRecognizer.processImage(inputImage);
-
-      // Extract text
-      final String extractedText = _extractTextFromBlocks(recognizedText);
-
-      // Detect dominant color
-      final String dominantColor = _detectDominantColor(image);
-
-      // Clean up temp file
+      // Cleanup
       try {
         await tempFile.delete();
       } catch (e) {
-        if (kDebugMode) {
-          print('Error deleting temp file: $e');
-        }
+        if (kDebugMode) print('Error deleting temp file: $e');
       }
 
-      if (extractedText.trim().isEmpty) {
-        return null;
-      }
+      if (result == null || result.text.trim().isEmpty) return null;
 
-      // Create and return ScannedLabel model with color
+      // Detect color
+      final String dominantColor = _detectDominantColor(image);
+
       return ScannedLabel(
-        text: extractedText,
+        text: result.text,
         timestamp: DateTime.now(),
         dominantColor: dominantColor,
       );
     } catch (e) {
       if (kDebugMode) {
-        print('Error processing image: $e');
+        print('Error processing camera image: $e');
       }
       return null;
     } finally {
@@ -122,72 +133,114 @@ class OcrService {
     }
   }
 
-  /// Convert CameraImage to img.Image
-  Future<img.Image?> _convertCameraImageToImage(CameraImage cameraImage) async {
+  /// Perform OCR on a file path
+  Future<_OcrResult?> _performOcr(String filePath) async {
     try {
-      final int width = cameraImage.width;
-      final int height = cameraImage.height;
+      final inputImage = InputImage.fromFilePath(filePath);
+      final recognizedText = await _textRecognizer.processImage(inputImage);
+      
+      final text = _extractTextFromBlocks(recognizedText);
+      final confidence = _calculateConfidence(recognizedText);
 
-      final img.Image image = img.Image(width: width, height: height);
+      if (text.trim().isEmpty) return null;
 
-      final bytesY = cameraImage.planes[0].bytes;
-      final bytesU =
-          cameraImage.planes.length > 1 ? cameraImage.planes[1].bytes : null;
-      final bytesV =
-          cameraImage.planes.length > 2 ? cameraImage.planes[2].bytes : null;
-
-      final int rowStrideY = cameraImage.planes[0].bytesPerRow;
-      final int rowStrideU =
-          cameraImage.planes.length > 1 ? cameraImage.planes[1].bytesPerRow : 0;
-      final int pixelStrideU = cameraImage.planes.length > 1
-          ? (cameraImage.planes[1].bytesPerPixel ?? 1)
-          : 1;
-
-      for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-          final int uvIndex = (x ~/ 2) * pixelStrideU + (y ~/ 2) * rowStrideU;
-          final int yIndex = y * rowStrideY + x;
-
-          final int Y = bytesY[yIndex];
-          final int U = bytesU != null ? bytesU[uvIndex] : 128;
-          final int V = bytesV != null ? bytesV[uvIndex] : 128;
-
-          // YUV to RGB conversion
-          int r = (Y + (1.370705 * (V - 128))).round();
-          int g = (Y - (0.337633 * (U - 128)) - (0.698001 * (V - 128))).round();
-          int b = (Y + (1.732446 * (U - 128))).round();
-
-          r = r.clamp(0, 255);
-          g = g.clamp(0, 255);
-          b = b.clamp(0, 255);
-
-          image.setPixelRgba(x, y, r, g, b, 255);
-        }
-      }
-
-      return image;
+      return _OcrResult(text: text, confidence: confidence);
     } catch (e) {
-      if (kDebugMode) {
-        print('Error converting camera image: $e');
-      }
+      if (kDebugMode) print('OCR error: $e');
       return null;
     }
   }
 
-  /// Detect dominant color in the image (green, red, or white)
+  /// Extract text from blocks with filtering
+  String _extractTextFromBlocks(RecognizedText recognizedText) {
+    final lines = <String>[];
+    final seenTexts = <String>{};
+
+    for (TextBlock block in recognizedText.blocks) {
+      // Filter out very small blocks
+      if (block.boundingBox.width < 15 || block.boundingBox.height < 8) {
+        continue;
+      }
+
+      final text = block.text.trim();
+      
+      // Skip empty or very short texts
+      if (text.isEmpty || text.length < 2) continue;
+
+      // Skip duplicates
+      final normalizedText = text.toLowerCase();
+      if (seenTexts.contains(normalizedText)) continue;
+      seenTexts.add(normalizedText);
+
+      // Clean up the text
+      final cleanedText = _cleanText(text);
+      if (cleanedText.isNotEmpty) {
+        lines.add(cleanedText);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  /// Clean extracted text
+  String _cleanText(String text) {
+    // Remove multiple spaces
+    text = text.replaceAll(RegExp(r'\s+'), ' ');
+    
+    // Remove leading/trailing spaces
+    text = text.trim();
+    
+    // Fix common OCR errors
+    text = text.replaceAll(RegExp(r'[|l]{2,}'), 'II');
+    text = text.replaceAll(RegExp(r'[oO](?=\d)'), '0');
+    text = text.replaceAll(RegExp(r'(?<=\d)[oO]'), '0');
+    
+    return text;
+  }
+
+  /// Calculate confidence score
+  double _calculateConfidence(RecognizedText recognizedText) {
+    if (recognizedText.blocks.isEmpty) return 0.0;
+
+    double totalConfidence = 0.0;
+    int blockCount = 0;
+
+    for (TextBlock block in recognizedText.blocks) {
+      final textLength = block.text.length;
+      if (textLength > 3) {
+        totalConfidence += 1.0;
+        blockCount++;
+      }
+    }
+
+    return blockCount > 0 ? totalConfidence / blockCount : 0.0;
+  }
+
+  /// Light enhancement - FAST
+  img.Image _lightEnhance(img.Image src) {
+    // Quick contrast and brightness adjustment
+    return img.adjustColor(src, contrast: 1.2, brightness: 1.05);
+  }
+
+  /// High contrast - FAST
+  img.Image _highContrast(img.Image src) {
+    // Stronger contrast adjustment
+    return img.adjustColor(src, contrast: 1.4, brightness: 1.1);
+  }
+
+  /// Simple color detection - samples center region only
   String _detectDominantColor(img.Image image) {
     try {
-      // Sample pixels from center area (where label should be)
+      // Sample only center region for speed
       final centerX = image.width ~/ 2;
       final centerY = image.height ~/ 2;
-      const sampleSize = 50; // Sample 50x50 area
+      const sampleSize = 50;
 
       int totalRed = 0;
       int totalGreen = 0;
       int totalBlue = 0;
       int pixelCount = 0;
 
-      // Sample from center region
       for (int y = centerY - sampleSize; y < centerY + sampleSize; y++) {
         if (y < 0 || y >= image.height) continue;
         
@@ -204,91 +257,119 @@ class OcrService {
 
       if (pixelCount == 0) return 'unknown';
 
-      // Calculate average RGB values
       final avgRed = totalRed / pixelCount;
       final avgGreen = totalGreen / pixelCount;
       final avgBlue = totalBlue / pixelCount;
 
-      // Determine dominant color
-      // White: All values high and similar
-      if (avgRed > 200 && avgGreen > 200 && avgBlue > 200) {
-        final diff = (avgRed - avgGreen).abs() + 
-                    (avgGreen - avgBlue).abs() + 
-                    (avgBlue - avgRed).abs();
-        if (diff < 30) {
-          return 'white';
-        }
-      }
-
-      // Green: Green channel significantly higher than red
-      if (avgGreen > avgRed + 20 && avgGreen > avgBlue + 20) {
-        return 'green';
-      }
-
-      // Red: Red channel significantly higher than green
-      if (avgRed > avgGreen + 20 && avgRed > avgBlue + 10) {
-        return 'red';
-      }
-
-      // Check for light green (pale green)
-      if (avgGreen > avgRed && avgGreen > 150 && avgRed > 120) {
-        return 'light_green';
-      }
-
-      // Check for light red (pink/pale red)
-      if (avgRed > avgGreen && avgRed > 150 && avgGreen > 120) {
-        return 'light_red';
-      }
-
-      // Default: determine by which channel is highest
-      if (avgGreen > avgRed && avgGreen > avgBlue) {
-        return 'green';
-      } else if (avgRed > avgGreen && avgRed > avgBlue) {
-        return 'red';
-      } else {
-        return 'white';
-      }
+      return _classifyColor(avgRed, avgGreen, avgBlue);
     } catch (e) {
-      if (kDebugMode) {
-        print('Error detecting color: $e');
-      }
+      if (kDebugMode) print('Error detecting color: $e');
       return 'unknown';
     }
   }
 
-  /// Extract text from recognized text blocks
-  String _extractTextFromBlocks(RecognizedText recognizedText) {
-    final StringBuffer buffer = StringBuffer();
+  /// Classify color based on RGB values
+  String _classifyColor(double r, double g, double b) {
+    final max = [r, g, b].reduce((a, b) => a > b ? a : b);
+    final min = [r, g, b].reduce((a, b) => a < b ? a : b);
+    final diff = max - min;
+    
+    final saturation = max == 0 ? 0 : (diff / max) * 100;
+    final brightness = max;
 
-    // Iterate through text blocks and extract text
-    for (TextBlock block in recognizedText.blocks) {
-      // Filter out very small text blocks (likely noise)
-      if (block.boundingBox.width < 20 || block.boundingBox.height < 10) {
-        continue;
-      }
-
-      buffer.writeln(block.text);
+    // White/Light detection
+    if (brightness > 200 && saturation < 15) {
+      return 'white';
     }
 
-    return buffer.toString().trim();
+    // Low saturation gray
+    if (saturation < 20 && brightness < 200) {
+      return 'white';
+    }
+
+    // Color detection
+    if (g > r + 15 && g > b + 15) {
+      if (brightness > 180) {
+        return 'light_green';
+      }
+      return 'green';
+    } else if (r > g + 15 && r > b + 10) {
+      if (brightness > 180 || saturation < 35) {
+        return 'light_red';
+      }
+      return 'red';
+    }
+
+    // Fallback
+    if (g > r && g > b) {
+      return brightness > 150 ? 'light_green' : 'green';
+    } else if (r > g && r > b) {
+      return brightness > 150 ? 'light_red' : 'red';
+    }
+
+    return 'white';
   }
 
-  /// Quick check if image contains text (lightweight detection)
+  /// Convert CameraImage to img.Image - OPTIMIZED
+  Future<img.Image?> _convertCameraImageToImage(CameraImage cameraImage) async {
+    try {
+      final int width = cameraImage.width;
+      final int height = cameraImage.height;
+
+      // Create image
+      final img.Image image = img.Image(width: width, height: height);
+
+      final bytesY = cameraImage.planes[0].bytes;
+      final bytesU = cameraImage.planes.length > 1 ? cameraImage.planes[1].bytes : null;
+      final bytesV = cameraImage.planes.length > 2 ? cameraImage.planes[2].bytes : null;
+
+      final int rowStrideY = cameraImage.planes[0].bytesPerRow;
+      final int rowStrideU = cameraImage.planes.length > 1 ? cameraImage.planes[1].bytesPerRow : 0;
+      final int pixelStrideU = cameraImage.planes.length > 1
+          ? (cameraImage.planes[1].bytesPerPixel ?? 1)
+          : 1;
+
+      // YUV to RGB conversion
+      for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+          final int uvIndex = (x ~/ 2) * pixelStrideU + (y ~/ 2) * rowStrideU;
+          final int yIndex = y * rowStrideY + x;
+
+          final int Y = bytesY[yIndex];
+          final int U = bytesU != null ? bytesU[uvIndex] : 128;
+          final int V = bytesV != null ? bytesV[uvIndex] : 128;
+
+          int r = (Y + (1.370705 * (V - 128))).round().clamp(0, 255);
+          int g = (Y - (0.337633 * (U - 128)) - (0.698001 * (V - 128))).round().clamp(0, 255);
+          int b = (Y + (1.732446 * (U - 128))).round().clamp(0, 255);
+
+          image.setPixelRgba(x, y, r, g, b, 255);
+        }
+      }
+
+      return image;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error converting camera image: $e');
+      }
+      return null;
+    }
+  }
+
+  /// Quick text detection - FAST
   Future<bool> hasDetectableText(CameraImage cameraImage) async {
     try {
-      // Quick lightweight check - just convert and check for high contrast areas
-      // This is much faster than full OCR
       final image = await _convertCameraImageToImage(cameraImage);
       if (image == null) return false;
 
-      // Sample center area for text-like patterns
       final centerX = image.width ~/ 2;
       final centerY = image.height ~/ 2;
-      const sampleSize = 100;
+      const sampleSize = 80;
 
-      int highContrastPixels = 0;
+      int darkPixels = 0;
       int totalSamples = 0;
 
+      // Quick sampling with larger steps for speed
       for (int y = centerY - sampleSize; y < centerY + sampleSize; y += 5) {
         if (y < 0 || y >= image.height) continue;
         
@@ -298,17 +379,15 @@ class OcrService {
           final pixel = image.getPixel(x, y);
           final brightness = (pixel.r.toInt() + pixel.g.toInt() + pixel.b.toInt()) / 3;
           
-          // Check if pixel is dark enough to be text
-          if (brightness < 100) {
-            highContrastPixels++;
+          if (brightness < 120) {
+            darkPixels++;
           }
           
           totalSamples++;
         }
       }
 
-      // If more than 10% of sampled pixels are dark, likely contains text
-      return totalSamples > 0 && (highContrastPixels / totalSamples) > 0.1;
+      return totalSamples > 0 && (darkPixels / totalSamples) > 0.1;
     } catch (e) {
       if (kDebugMode) {
         print('Error in text detection: $e');
@@ -317,8 +396,15 @@ class OcrService {
     }
   }
 
-  /// Dispose resources
   void dispose() {
     _textRecognizer.close();
   }
+}
+
+/// Internal class for OCR results
+class _OcrResult {
+  final String text;
+  final double confidence;
+
+  _OcrResult({required this.text, required this.confidence});
 }

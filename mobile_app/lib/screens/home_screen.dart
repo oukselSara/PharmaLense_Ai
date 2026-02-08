@@ -1,93 +1,100 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'camera_screen.dart';
 import 'invoice_scan_screen.dart';
 
-/// Home screen with options to scan medicine or invoice
-class HomeScreen extends StatelessWidget {
+/// Premium home screen with luxury design
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  late AnimationController _cardController;
+  late Animation<double> _cardAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Card entrance animation
+    _cardController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+
+    _cardAnimation = CurvedAnimation(
+      parent: _cardController,
+      curve: Curves.easeOutCubic,
+    );
+
+    _cardController.forward();
+
+    // Set status bar style
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _cardController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Colors.green.shade50,
-              Colors.white,
+              Color(0xFFF8FDFB), // Soft mint
+              Color(0xFFFFFFFF), // White
             ],
           ),
         ),
         child: SafeArea(
           child: Column(
             children: [
-              // Header section
-              _buildHeader(),
+              // Premium header
+              _buildPremiumHeader(),
 
               // Main content
               Expanded(
-                child: Padding(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Welcome text
-                      const Text(
-                        'What would you like to scan?',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
+                      const SizedBox(height: 20),
 
-                      const SizedBox(height: 50),
+                      // Welcome section
+                      _buildWelcomeSection(),
 
-                      // Scan Medicine Button
-                      _buildScanButton(
-                        context: context,
-                        icon: Icons.medication,
-                        title: 'Scan Medicine',
-                        subtitle: 'Extract text from medicine labels',
-                        color: Colors.green,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const CameraScreen(),
-                            ),
-                          );
-                        },
-                      ),
+                      const SizedBox(height: 36),
+
+                      // Scan options
+                      _buildScanOptions(),
+
+                      const SizedBox(height: 32),
+
+                      // Features section
+                      _buildFeaturesSection(),
 
                       const SizedBox(height: 24),
-
-                      // Scan Invoice Button
-                      _buildScanButton(
-                        context: context,
-                        icon: Icons.receipt_long,
-                        title: 'Scan Invoice',
-                        subtitle: 'Extract text from invoices',
-                        color: Colors.blue,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const InvoiceScanScreen(),
-                            ),
-                          );
-                        },
-                      ),
                     ],
                   ),
                 ),
               ),
-
-              // Footer
-              _buildFooter(),
             ],
           ),
         ),
@@ -95,54 +102,90 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// Build header with logo and title
-  Widget _buildHeader() {
+  Widget _buildPremiumHeader() {
     return Container(
-      padding: const EdgeInsets.all(24),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+      child: Row(
         children: [
           // Logo
           Container(
-            width: 80,
-            height: 80,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              color: Colors.green,
-              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0A4D3C),
+                  Color(0xFF14B57F),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.green.withOpacity(0.3),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
+                  color: const Color(0xFF14B57F).withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
             child: const Icon(
-              Icons.medical_services,
-              size: 45,
+              Icons.medical_services_rounded,
               color: Colors.white,
+              size: 26,
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(width: 14),
 
-          // Title
-          const Text(
-            'Medicine Scanner',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+          // App name
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'PharmaLens',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0A4D3C),
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Text(
+                  'Professional Scanner',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF6B8B7F),
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
             ),
           ),
 
-          const SizedBox(height: 4),
-
-          // Subtitle
-          Text(
-            'Your medical document assistant',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
+          // Settings button
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFE8F5F1),
+                width: 1.5,
+              ),
+            ),
+            child: IconButton(
+              icon: const Icon(
+                Icons.tune_rounded,
+                size: 22,
+                color: Color(0xFF0A4D3C),
+              ),
+              onPressed: () {
+                // Settings action
+              },
             ),
           ),
         ],
@@ -150,122 +193,401 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// Build scan button
-  Widget _buildScanButton({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.2),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            ),
-          ],
-          border: Border.all(
-            color: color.withOpacity(0.3),
-            width: 2,
+  Widget _buildWelcomeSection() {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'What would you\nlike to scan?',
+          style: TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF0A4D3C),
+            height: 1.2,
+            letterSpacing: -1.0,
           ),
         ),
-        child: Row(
-          children: [
-            // Icon
-            Container(
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Icon(
-                icon,
-                size: 40,
-                color: color,
-              ),
-            ),
+        SizedBox(height: 12),
+        Text(
+          'AI-powered text extraction from medical documents',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
+            color: Color(0xFF6B8B7F),
+            height: 1.5,
+          ),
+        ),
+      ],
+    );
+  }
 
-            const SizedBox(width: 20),
-
-            // Text
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
+  Widget _buildScanOptions() {
+    return Column(
+      children: [
+        // Medicine Scanner - Primary action
+        SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.3),
+            end: Offset.zero,
+          ).animate(_cardAnimation),
+          child: FadeTransition(
+            opacity: _cardAnimation,
+            child: _PremiumScanCard(
+              icon: Icons.medication_rounded,
+              title: 'Scan Medicine Label',
+              subtitle: 'Extract text from medicine packaging',
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0A4D3C),
+                  Color(0xFF14B57F),
                 ],
               ),
+              isPrimary: true,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        const CameraScreen(),
+                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.95, end: 1.0).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            ),
+                          ),
+                          child: child,
+                        ),
+                      );
+                    },
+                    transitionDuration: const Duration(milliseconds: 400),
+                  ),
+                );
+              },
             ),
+          ),
+        ),
 
-            // Arrow icon
-            Icon(
-              Icons.arrow_forward_ios,
-              color: color,
-              size: 24,
+        const SizedBox(height: 16),
+
+        // Invoice Scanner - Secondary action
+        SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.3),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: _cardAnimation,
+            curve: const Interval(0.2, 1.0, curve: Curves.easeOutCubic),
+          )),
+          child: FadeTransition(
+            opacity: CurvedAnimation(
+              parent: _cardAnimation,
+              curve: const Interval(0.2, 1.0),
+            ),
+            child: _PremiumScanCard(
+              icon: Icons.receipt_long_rounded,
+              title: 'Scan Invoice',
+              subtitle: 'Extract text from medical invoices',
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF0A4D3C).withOpacity(0.05),
+                  const Color(0xFF14B57F).withOpacity(0.05),
+                ],
+              ),
+              isPrimary: false,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        const InvoiceScanScreen(),
+                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                      return FadeTransition(opacity: animation, child: child);
+                    },
+                    transitionDuration: const Duration(milliseconds: 300),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeaturesSection() {
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0, 0.2),
+        end: Offset.zero,
+      ).animate(CurvedAnimation(
+        parent: _cardAnimation,
+        curve: const Interval(0.4, 1.0, curve: Curves.easeOutCubic),
+      )),
+      child: FadeTransition(
+        opacity: CurvedAnimation(
+          parent: _cardAnimation,
+          curve: const Interval(0.4, 1.0),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Features',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0A4D3C),
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _FeatureCard(
+                    icon: Icons.auto_awesome_rounded,
+                    title: 'AI-Powered',
+                    subtitle: 'Advanced OCR',
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _FeatureCard(
+                    icon: Icons.speed_rounded,
+                    title: 'Lightning Fast',
+                    subtitle: '1-2 seconds',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _FeatureCard(
+                    icon: Icons.shield_rounded,
+                    title: 'Secure',
+                    subtitle: 'On-device',
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _FeatureCard(
+                    icon: Icons.offline_bolt_rounded,
+                    title: 'Works Offline',
+                    subtitle: 'No internet',
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  /// Build footer
-  Widget _buildFooter() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.info_outline,
-                size: 16,
-                color: Colors.grey[600],
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'All processing happens on your device',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+/// Premium scan card widget
+class _PremiumScanCard extends StatefulWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Gradient gradient;
+  final bool isPrimary;
+  final VoidCallback onTap;
+
+  const _PremiumScanCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.gradient,
+    required this.isPrimary,
+    required this.onTap,
+  });
+
+  @override
+  State<_PremiumScanCard> createState() => _PremiumScanCardState();
+}
+
+class _PremiumScanCardState extends State<_PremiumScanCard> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.98 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: widget.gradient,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: widget.isPrimary
+                    ? const Color(0xFF14B57F).withOpacity(0.25)
+                    : Colors.black.withOpacity(0.04),
+                blurRadius: widget.isPrimary ? 20 : 8,
+                offset: Offset(0, widget.isPrimary ? 8 : 4),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          child: Row(
+            children: [
+              // Icon container
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: widget.isPrimary
+                      ? Colors.white.withOpacity(0.2)
+                      : const Color(0xFF0A4D3C).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  widget.icon,
+                  size: 28,
+                  color: widget.isPrimary
+                      ? Colors.white
+                      : const Color(0xFF0A4D3C),
+                ),
+              ),
+
+              const SizedBox(width: 18),
+
+              // Text content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: widget.isPrimary
+                            ? Colors.white
+                            : const Color(0xFF0A4D3C),
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: widget.isPrimary
+                            ? Colors.white.withOpacity(0.85)
+                            : const Color(0xFF6B8B7F),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Arrow icon
+              Icon(
+                Icons.arrow_forward_rounded,
+                color: widget.isPrimary
+                    ? Colors.white
+                    : const Color(0xFF0A4D3C),
+                size: 24,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Feature card widget
+class _FeatureCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _FeatureCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE8F5F1),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0A4D3C),
+                  Color(0xFF14B57F),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(height: 12),
           Text(
-            'Version 1.0.0',
-            style: TextStyle(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0A4D3C),
+              letterSpacing: -0.2,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: const TextStyle(
               fontSize: 12,
-              color: Colors.grey[500],
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF6B8B7F),
             ),
           ),
         ],
