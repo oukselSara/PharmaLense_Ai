@@ -24,10 +24,10 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   void initState() {
     super.initState();
     
-    // Fade animation
+    // Fade animation - faster
     _fadeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 400),
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -37,10 +37,10 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       ),
     );
 
-    // Scale animation
+    // Scale animation - faster
     _scaleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: const Duration(milliseconds: 600),
     );
 
     _scaleAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
@@ -73,8 +73,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     _fadeController.forward();
     _scaleController.forward();
 
-    // Navigate after delay - reduced for faster startup
-    Timer(const Duration(milliseconds: 1500), () {
+    // Navigate after delay - ultra fast startup (500ms)
+    Timer(const Duration(milliseconds: 500), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
