@@ -16,7 +16,13 @@ dependencies:
   google_mlkit_commons: ^0.6.0
   image: ^4.0.21
   http: ^1.2.0
+  
+  # Image picker for gallery upload
+  image_picker: ^1.0.4
+  
+  # Permissions
   permission_handler: ^11.0.1
+  
   # State management
   provider: ^6.1.1
   

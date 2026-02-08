@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../services/camera_service.dart';
 import '../models/scanned_label.dart';
 import '../widgets/camera_preview_widget.dart';
 import 'confirmation_screen.dart';
 
-/// Camera screen with automatic YOLO-based label detection
+/// Camera screen with automatic YOLO-based label detection, flashlight, and image upload
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
 
@@ -15,6 +17,9 @@ class CameraScreen extends StatefulWidget {
 
 class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
   bool _isInitializing = true;
+  bool _isFlashlightOn = false;
+  final ImagePicker _imagePicker = ImagePicker();
+  bool _isProcessingImage = false;
 
   @override
   void initState() {
@@ -142,6 +147,131 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     _startScanning();
   }
 
+  /// Toggle flashlight on/off
+  Future<void> _toggleFlashlight() async {
+    final cameraService = context.read<CameraService>();
+    
+    try {
+      await cameraService.toggleFlashlight();
+      setState(() {
+        _isFlashlightOn = !_isFlashlightOn;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to toggle flashlight: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Pick image from gallery and process it
+  Future<void> _pickImageFromGallery() async {
+    try {
+      setState(() {
+        _isProcessingImage = true;
+      });
+
+      // Stop scanning while processing image
+      final cameraService = context.read<CameraService>();
+      await cameraService.stopScanning();
+
+      // Pick image
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (image == null) {
+        setState(() {
+          _isProcessingImage = false;
+        });
+        // Resume scanning
+        _startScanning();
+        return;
+      }
+
+      // Show processing dialog
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Colors.green),
+                SizedBox(height: 16),
+                Text('Processing image...'),
+              ],
+            ),
+          ),
+        );
+      }
+
+      // Process the image
+      final imageFile = File(image.path);
+      final scannedLabel = await cameraService.processUploadedImage(imageFile);
+
+      // Close processing dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      setState(() {
+        _isProcessingImage = false;
+      });
+
+      if (scannedLabel != null && scannedLabel.hasValidText) {
+        // Show confirmation screen
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ConfirmationScreen(
+                scannedLabel: scannedLabel,
+                onConfirm: _onConfirm,
+                onRetry: () {
+                  Navigator.pop(context);
+                  _pickImageFromGallery(); // Let user pick another image
+                },
+              ),
+            ),
+          );
+        }
+      } else {
+        // No text found
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No text detected in image. Please try another photo.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          _startScanning();
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isProcessingImage = false;
+      });
+
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog if open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error processing image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        _startScanning();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -225,15 +355,67 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                   );
                 }
 
-                return CameraPreviewWidget(
-                  cameraController: cameraService.cameraController!,
-                  isScanning: cameraService.isScanning,
-                  labelDetected: cameraService.labelDetected,
-                  statusMessage: cameraService.statusMessage,
-                  detectionBox: cameraService.currentDetection,
+                return Stack(
+                  children: [
+                    // Camera preview with detection
+                    CameraPreviewWidget(
+                      cameraController: cameraService.cameraController!,
+                      isScanning: cameraService.isScanning,
+                      labelDetected: cameraService.labelDetected,
+                      statusMessage: cameraService.statusMessage,
+                      detectionBox: cameraService.currentDetection,
+                    ),
+
+                    // Control buttons overlay
+                    _buildControlButtons(),
+                  ],
                 );
               },
             ),
+    );
+  }
+
+  /// Build control buttons (flashlight, upload)
+  Widget _buildControlButtons() {
+    return Positioned(
+      right: 16,
+      bottom: 100,
+      child: Column(
+        children: [
+          // Upload image button
+          FloatingActionButton(
+            heroTag: 'upload',
+            onPressed: _isProcessingImage ? null : _pickImageFromGallery,
+            backgroundColor: Colors.blue,
+            tooltip: 'Upload Image',
+            child: _isProcessingImage 
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.photo_library, size: 28),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Flashlight toggle button
+          FloatingActionButton(
+            heroTag: 'flashlight',
+            onPressed: _toggleFlashlight,
+            backgroundColor: _isFlashlightOn ? Colors.yellow : Colors.white,
+            tooltip: _isFlashlightOn ? 'Turn off flashlight' : 'Turn on flashlight',
+            child: Icon(
+              _isFlashlightOn ? Icons.flash_on : Icons.flash_off,
+              color: _isFlashlightOn ? Colors.black : Colors.grey[700],
+              size: 28,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -270,15 +452,15 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             ),
             const SizedBox(height: 12),
             _buildInfoRow(
-              icon: Icons.center_focus_strong,
-              title: 'How it works',
-              description: 'Just point at a medicine label',
+              icon: Icons.flash_on,
+              title: 'Flashlight',
+              description: 'Toggle for better visibility',
             ),
             const SizedBox(height: 12),
             _buildInfoRow(
-              icon: Icons.timer,
-              title: 'Fast & Accurate',
-              description: 'Captures and reads automatically',
+              icon: Icons.photo_library,
+              title: 'Upload Image',
+              description: 'Process saved photos',
             ),
           ],
         ),

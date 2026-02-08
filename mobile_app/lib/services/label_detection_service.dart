@@ -10,7 +10,7 @@ import 'package:image/image.dart' as img;
 class YoloLabelDetectionService {
   // Update this to your computer's IP address
   // Find it using: ipconfig (Windows) or ifconfig (Mac/Linux)
-  static const String baseUrl = "http://192.168.1.5:8000";
+  static const String baseUrl = "http://192.168.1.7:8000";
   
   bool _isProcessing = false;
 

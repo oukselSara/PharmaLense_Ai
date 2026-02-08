@@ -18,6 +18,52 @@ class OcrService {
     _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
   }
 
+  /// Process an image file from gallery/storage
+  Future<ScannedLabel?> processImageFile(File imageFile) async {
+    if (_isProcessing) return null;
+
+    _isProcessing = true;
+    try {
+      // Read image file
+      final imageBytes = await imageFile.readAsBytes();
+      final image = img.decodeImage(imageBytes);
+      
+      if (image == null) return null;
+
+      // Create InputImage from file
+      final inputImage = InputImage.fromFilePath(imageFile.path);
+
+      // Perform text recognition
+      final RecognizedText recognizedText =
+          await _textRecognizer.processImage(inputImage);
+
+      // Extract text
+      final String extractedText = _extractTextFromBlocks(recognizedText);
+
+      // Detect dominant color
+      final String dominantColor = _detectDominantColor(image);
+
+      if (extractedText.trim().isEmpty) {
+        return null;
+      }
+
+      // Create and return ScannedLabel model with color
+      return ScannedLabel(
+        text: extractedText,
+        timestamp: DateTime.now(),
+        imagePath: imageFile.path,
+        dominantColor: dominantColor,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error processing image file: $e');
+      }
+      return null;
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
   /// Process a camera image and extract text with color detection
   Future<ScannedLabel?> processImageWithColor(CameraImage cameraImage) async {
     if (_isProcessing) return null;
@@ -65,52 +111,6 @@ class OcrService {
         text: extractedText,
         timestamp: DateTime.now(),
         dominantColor: dominantColor,
-      );
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error processing image: $e');
-      }
-      return null;
-    } finally {
-      _isProcessing = false;
-    }
-  }
-
-  /// Process image without color detection (faster)
-  Future<ScannedLabel?> processImage(CameraImage cameraImage) async {
-    if (_isProcessing) return null;
-
-    _isProcessing = true;
-    try {
-      final image = await _convertCameraImageToImage(cameraImage);
-      if (image == null) return null;
-
-      final tempDir = Directory.systemTemp;
-      final tempFile = File(
-          '${tempDir.path}/frame_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await tempFile.writeAsBytes(img.encodeJpg(image));
-
-      final inputImage = InputImage.fromFilePath(tempFile.path);
-      final RecognizedText recognizedText =
-          await _textRecognizer.processImage(inputImage);
-
-      final String extractedText = _extractTextFromBlocks(recognizedText);
-
-      try {
-        await tempFile.delete();
-      } catch (e) {
-        if (kDebugMode) {
-          print('Error deleting temp file: $e');
-        }
-      }
-
-      if (extractedText.trim().isEmpty) {
-        return null;
-      }
-
-      return ScannedLabel(
-        text: extractedText,
-        timestamp: DateTime.now(),
       );
     } catch (e) {
       if (kDebugMode) {

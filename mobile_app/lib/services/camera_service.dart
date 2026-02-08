@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -342,6 +343,63 @@ class CameraService extends ChangeNotifier {
     }
     
     notifyListeners();
+  }
+
+  /// Toggle flashlight on/off
+  Future<void> toggleFlashlight() async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      throw Exception('Camera not initialized');
+    }
+
+    try {
+      final currentFlashMode = _cameraController!.value.flashMode;
+      
+      if (currentFlashMode == FlashMode.off) {
+        await _cameraController!.setFlashMode(FlashMode.torch);
+      } else {
+        await _cameraController!.setFlashMode(FlashMode.off);
+      }
+      
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error toggling flashlight: $e');
+      }
+      throw Exception('Failed to toggle flashlight');
+    }
+  }
+
+  /// Get current flashlight state
+  bool get isFlashlightOn {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return false;
+    }
+    return _cameraController!.value.flashMode == FlashMode.torch;
+  }
+
+  /// Process uploaded image from gallery
+  Future<ScannedLabel?> processUploadedImage(File imageFile) async {
+    try {
+      _updateStatus('Processing uploaded image...');
+      notifyListeners();
+
+      // Read image file and process with OCR
+      final scannedLabel = await _ocrService.processImageFile(imageFile);
+
+      if (scannedLabel != null && scannedLabel.hasValidText) {
+        _updateStatus('Text extracted successfully!');
+        return scannedLabel;
+      } else {
+        _updateStatus('No text found in image');
+        return null;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error processing uploaded image: $e');
+      }
+      _updateStatus('Failed to process image');
+      return null;
+    }
   }
 
   /// Dispose resources

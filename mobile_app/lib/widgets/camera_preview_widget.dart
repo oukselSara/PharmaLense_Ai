@@ -42,6 +42,7 @@ class CameraPreviewWidget extends StatelessWidget {
           AnimatedDetectionOverlay(
             detectionBox: detectionBox!,
             labelDetected: labelDetected,
+            cameraController: cameraController,
           ),
 
         // Status and instructions
@@ -158,11 +159,13 @@ class CameraPreviewWidget extends StatelessWidget {
 class AnimatedDetectionOverlay extends StatefulWidget {
   final DetectionResult detectionBox;
   final bool labelDetected;
+  final CameraController cameraController;
 
   const AnimatedDetectionOverlay({
     super.key,
     required this.detectionBox,
     required this.labelDetected,
+    required this.cameraController,
   });
 
   @override
@@ -275,6 +278,7 @@ class _AnimatedDetectionOverlayState extends State<AnimatedDetectionOverlay>
             glowValue: _glowAnimation.value,
             cornerLength: _cornerAnimation.value,
             particleProgress: _particleController.value,
+            cameraController: widget.cameraController,
           ),
         );
       },
@@ -291,6 +295,7 @@ class AnimatedDetectionPainter extends CustomPainter {
   final double glowValue;
   final double cornerLength;
   final double particleProgress;
+  final CameraController cameraController;
 
   AnimatedDetectionPainter({
     required this.detectionBox,
@@ -300,49 +305,93 @@ class AnimatedDetectionPainter extends CustomPainter {
     required this.glowValue,
     required this.cornerLength,
     required this.particleProgress,
+    required this.cameraController,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Get camera preview size
+    final cameraValue = cameraController.value;
+    final previewSize = cameraValue.previewSize;
+    
+    if (previewSize == null) return;
+
+    // Calculate scale factors
+    // Camera preview is rotated 90 degrees on most devices
+    final imageWidth = previewSize.height;
+    final imageHeight = previewSize.width;
+    
+    // Screen size
+    final screenWidth = size.width;
+    final screenHeight = size.height;
+    
+    // Calculate scale to fit camera preview in screen
+    final screenAspectRatio = screenWidth / screenHeight;
+    final imageAspectRatio = imageWidth / imageHeight;
+    
+    double scaleX, scaleY;
+    double offsetX = 0, offsetY = 0;
+    
+    if (screenAspectRatio > imageAspectRatio) {
+      // Screen is wider - fit height
+      scaleY = screenHeight / imageHeight;
+      scaleX = scaleY;
+      offsetX = (screenWidth - imageWidth * scaleX) / 2;
+    } else {
+      // Screen is taller - fit width
+      scaleX = screenWidth / imageWidth;
+      scaleY = scaleX;
+      offsetY = (screenHeight - imageHeight * scaleY) / 2;
+    }
+
+    // Convert YOLO coordinates to screen coordinates
     final rect = Rect.fromLTRB(
-      detectionBox.box.x1.toDouble(),
-      detectionBox.box.y1.toDouble(),
-      detectionBox.box.x2.toDouble(),
-      detectionBox.box.y2.toDouble(),
+      detectionBox.box.x1 * scaleX + offsetX,
+      detectionBox.box.y1 * scaleY + offsetY,
+      detectionBox.box.x2 * scaleX + offsetX,
+      detectionBox.box.y2 * scaleY + offsetY,
+    );
+
+    // Ensure rect is within bounds
+    final clampedRect = Rect.fromLTRB(
+      rect.left.clamp(0, size.width),
+      rect.top.clamp(0, size.height),
+      rect.right.clamp(0, size.width),
+      rect.bottom.clamp(0, size.height),
     );
 
     // Draw glow effect (background)
     if (labelDetected) {
-      _drawGlowEffect(canvas, rect);
+      _drawGlowEffect(canvas, clampedRect);
     }
 
     // Draw highlight overlay
-    _drawHighlightOverlay(canvas, rect);
+    _drawHighlightOverlay(canvas, clampedRect);
 
     // Draw scanning line (only when not detected)
     if (!labelDetected) {
-      _drawScanningLine(canvas, rect);
+      _drawScanningLine(canvas, clampedRect);
     }
 
     // Draw main border box
-    _drawMainBorder(canvas, rect);
+    _drawMainBorder(canvas, clampedRect);
 
     // Draw animated corners
-    _drawAnimatedCorners(canvas, rect);
+    _drawAnimatedCorners(canvas, clampedRect);
 
     // Draw particles (when detected)
     if (labelDetected) {
-      _drawParticles(canvas, rect);
+      _drawParticles(canvas, clampedRect);
     }
 
     // Draw confidence badge
     if (labelDetected) {
-      _drawConfidenceBadge(canvas, rect);
+      _drawConfidenceBadge(canvas, clampedRect);
     }
 
     // Draw detection icon
     if (labelDetected) {
-      _drawDetectionIcon(canvas, rect);
+      _drawDetectionIcon(canvas, clampedRect);
     }
   }
 
@@ -523,6 +572,9 @@ class AnimatedDetectionPainter extends CustomPainter {
 
   /// Draw floating particles when detected
   void _drawParticles(Canvas canvas, Rect rect) {
+    final particlePaint = Paint()
+      ..color = Colors.green.withOpacity(0.6)
+      ..style = PaintingStyle.fill;
 
     // Create particles around the border
     for (int i = 0; i < 20; i++) {
