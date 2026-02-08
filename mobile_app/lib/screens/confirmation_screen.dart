@@ -99,10 +99,10 @@ class _PremiumConfirmationScreenState extends State<PremiumConfirmationScreen>
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   width: 1,
                 ),
               ),
@@ -124,7 +124,7 @@ class _PremiumConfirmationScreenState extends State<PremiumConfirmationScreen>
             letterSpacing: -0.3,
             shadows: [
               Shadow(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha: 0.3),
                 blurRadius: 8,
               ),
             ],
@@ -138,7 +138,7 @@ class _PremiumConfirmationScreenState extends State<PremiumConfirmationScreen>
             end: Alignment.bottomCenter,
             colors: [
               labelColor,
-              labelColor.withOpacity(0.8),
+              labelColor.withValues(alpha: 0.8),
             ],
           ),
         ),
@@ -189,7 +189,7 @@ class _PremiumConfirmationScreenState extends State<PremiumConfirmationScreen>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withValues(alpha: 0.2),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -225,10 +225,10 @@ class _PremiumConfirmationScreenState extends State<PremiumConfirmationScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 width: 1,
               ),
             ),
@@ -253,7 +253,7 @@ class _PremiumConfirmationScreenState extends State<PremiumConfirmationScreen>
                   width: 4,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -261,7 +261,7 @@ class _PremiumConfirmationScreenState extends State<PremiumConfirmationScreen>
                 Text(
                   widget.scannedLabel.formattedTime,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
@@ -282,7 +282,7 @@ class _PremiumConfirmationScreenState extends State<PremiumConfirmationScreen>
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 30,
             offset: const Offset(0, 10),
           ),
@@ -338,7 +338,7 @@ class _PremiumConfirmationScreenState extends State<PremiumConfirmationScreen>
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF14B57F).withOpacity(0.1),
+                        color: const Color(0xFF14B57F).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
@@ -417,7 +417,7 @@ class _PremiumConfirmationScreenState extends State<PremiumConfirmationScreen>
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, -5),
           ),
@@ -438,7 +438,7 @@ class _PremiumConfirmationScreenState extends State<PremiumConfirmationScreen>
                 backgroundColor: labelColor,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                shadowColor: labelColor.withOpacity(0.4),
+                shadowColor: labelColor.withValues(alpha: 0.4),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),

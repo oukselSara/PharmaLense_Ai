@@ -123,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF14B57F).withOpacity(0.3),
+                  color: const Color(0xFF14B57F).withValues(alpha: 0.3),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -297,8 +297,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF0A4D3C).withOpacity(0.05),
-                  const Color(0xFF14B57F).withOpacity(0.05),
+                  const Color(0xFF0A4D3C).withValues(alpha: 0.05),
+                  const Color(0xFF14B57F).withValues(alpha: 0.05),
                 ],
               ),
               isPrimary: false,
@@ -336,10 +336,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           parent: _cardAnimation,
           curve: const Interval(0.4, 1.0),
         ),
-        child: Column(
+        child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Features',
               style: TextStyle(
                 fontSize: 18,
@@ -348,7 +348,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 letterSpacing: -0.3,
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -358,7 +358,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     subtitle: 'Advanced OCR',
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: _FeatureCard(
                     icon: Icons.speed_rounded,
@@ -368,7 +368,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -378,7 +378,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     subtitle: 'On-device',
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: _FeatureCard(
                     icon: Icons.offline_bolt_rounded,
@@ -440,8 +440,8 @@ class _PremiumScanCardState extends State<_PremiumScanCard> {
             boxShadow: [
               BoxShadow(
                 color: widget.isPrimary
-                    ? const Color(0xFF14B57F).withOpacity(0.25)
-                    : Colors.black.withOpacity(0.04),
+                    ? const Color(0xFF14B57F).withValues(alpha: 0.25)
+                    : Colors.black.withValues(alpha: 0.04),
                 blurRadius: widget.isPrimary ? 20 : 8,
                 offset: Offset(0, widget.isPrimary ? 8 : 4),
               ),
@@ -455,8 +455,8 @@ class _PremiumScanCardState extends State<_PremiumScanCard> {
                 height: 56,
                 decoration: BoxDecoration(
                   color: widget.isPrimary
-                      ? Colors.white.withOpacity(0.2)
-                      : const Color(0xFF0A4D3C).withOpacity(0.1),
+                      ? Colors.white.withValues(alpha: 0.2)
+                      : const Color(0xFF0A4D3C).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
@@ -493,7 +493,7 @@ class _PremiumScanCardState extends State<_PremiumScanCard> {
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                         color: widget.isPrimary
-                            ? Colors.white.withOpacity(0.85)
+                            ? Colors.white.withValues(alpha: 0.85)
                             : const Color(0xFF6B8B7F),
                       ),
                     ),
@@ -542,7 +542,7 @@ class _FeatureCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

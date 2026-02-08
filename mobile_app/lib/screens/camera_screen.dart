@@ -86,7 +86,7 @@ class _CameraScreenState extends State<CameraScreen>
   void _showServerOfflineDialog() {
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.7),
+      barrierColor: Colors.black.withValues(alpha: 0.7),
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
         child: Container(
@@ -96,7 +96,7 @@ class _CameraScreenState extends State<CameraScreen>
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
+                color: Colors.black.withValues(alpha: 0.2),
                 blurRadius: 30,
                 offset: const Offset(0, 10),
               ),
@@ -238,14 +238,14 @@ class _CameraScreenState extends State<CameraScreen>
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
+        content: const Row(
           children: [
-            const Icon(Icons.check_circle, color: Colors.white, size: 20),
-            const SizedBox(width: 12),
+            Icon(Icons.check_circle, color: Colors.white, size: 20),
+            SizedBox(width: 12),
             Expanded(
               child: Text(
                 'Label saved successfully',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -288,7 +288,7 @@ class _CameraScreenState extends State<CameraScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to toggle flashlight'),
+            content: const Text('Failed to toggle flashlight'),
             backgroundColor: const Color(0xFFEF5350),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -327,7 +327,7 @@ class _CameraScreenState extends State<CameraScreen>
         showDialog(
           context: context,
           barrierDismissible: false,
-          barrierColor: Colors.black.withOpacity(0.7),
+          barrierColor: Colors.black.withValues(alpha: 0.7),
           builder: (context) => Center(
             child: Container(
               padding: const EdgeInsets.all(32),
@@ -402,7 +402,7 @@ class _CameraScreenState extends State<CameraScreen>
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error processing image'),
+            content: const Text('Error processing image'),
             backgroundColor: const Color(0xFFEF5350),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -430,10 +430,10 @@ class _CameraScreenState extends State<CameraScreen>
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   width: 1,
                 ),
               ),
@@ -455,7 +455,7 @@ class _CameraScreenState extends State<CameraScreen>
             letterSpacing: -0.3,
             shadows: [
               Shadow(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha: 0.3),
                 blurRadius: 8,
               ),
             ],
@@ -472,11 +472,11 @@ class _CameraScreenState extends State<CameraScreen>
                     height: 40,
                     decoration: BoxDecoration(
                       color: cameraService.serverConnected
-                          ? const Color(0xFF14B57F).withOpacity(0.3)
-                          : const Color(0xFFFF9800).withOpacity(0.3),
+                          ? const Color(0xFF14B57F).withValues(alpha: 0.3)
+                          : const Color(0xFFFF9800).withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         width: 1,
                       ),
                     ),
@@ -687,27 +687,27 @@ class _PremiumActionButtonState extends State<_PremiumActionButton> {
           decoration: BoxDecoration(
             color: widget.isActive
                 ? const Color(0xFFFFC107)
-                : Colors.white.withOpacity(0.95),
+                : Colors.white.withValues(alpha: 0.95),
             shape: BoxShape.circle,
             border: Border.all(
               color: widget.isActive
-                  ? Colors.white.withOpacity(0.3)
-                  : Colors.black.withOpacity(0.05),
+                  ? Colors.white.withValues(alpha: 0.3)
+                  : Colors.black.withValues(alpha: 0.05),
               width: 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
+                color: Colors.black.withValues(alpha: 0.2),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
           child: widget.isProcessing
-              ? Padding(
-                  padding: const EdgeInsets.all(16),
+              ? const Padding(
+                  padding: EdgeInsets.all(16),
                   child: CircularProgressIndicator(
-                    color: const Color(0xFF14B57F),
+                    color: Color(0xFF14B57F),
                     strokeWidth: 3,
                   ),
                 )

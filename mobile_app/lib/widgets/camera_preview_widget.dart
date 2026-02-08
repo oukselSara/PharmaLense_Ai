@@ -85,10 +85,10 @@ class PremiumCameraPreviewWidget extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.6),
+          color: Colors.black.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withValues(alpha: 0.1),
             width: 1,
           ),
         ),
@@ -97,13 +97,13 @@ class PremiumCameraPreviewWidget extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (isScanning && !labelDetected) ...[
-              SizedBox(
+              const SizedBox(
                 width: 16,
                 height: 16,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    const Color(0xFF14B57F),
+                    Color(0xFF14B57F),
                   ),
                 ),
               ),
@@ -156,10 +156,10 @@ class PremiumCameraPreviewWidget extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 40),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.6),
+              color: Colors.black.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withValues(alpha: 0.1),
                 width: 1,
               ),
             ),
@@ -169,7 +169,7 @@ class PremiumCameraPreviewWidget extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF14B57F).withOpacity(0.2),
+                    color: const Color(0xFF14B57F).withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
@@ -328,7 +328,7 @@ class _PremiumDetectionPainter extends CustomPainter {
     
     // Outer glow
     final glowPaint = Paint()
-      ..color = color.withOpacity(0.15 * pulseValue)
+      ..color = color.withValues(alpha: 0.15 * pulseValue)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
     
     canvas.drawRRect(
@@ -342,8 +342,8 @@ class _PremiumDetectionPainter extends CustomPainter {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          color.withOpacity(pulseValue),
-          color.withOpacity(pulseValue * 0.8),
+          color.withValues(alpha: pulseValue),
+          color.withValues(alpha: pulseValue * 0.8),
         ],
       ).createShader(rect)
       ..style = PaintingStyle.stroke
@@ -356,7 +356,7 @@ class _PremiumDetectionPainter extends CustomPainter {
 
     // Corner accents
     final cornerPaint = Paint()
-      ..color = Colors.white.withOpacity(pulseValue * 0.9)
+      ..color = Colors.white.withValues(alpha: pulseValue * 0.9)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4
       ..strokeCap = StrokeCap.round;
@@ -391,7 +391,7 @@ class _PremiumDetectionPainter extends CustomPainter {
     // Inner fill
     if (labelDetected) {
       final fillPaint = Paint()
-        ..color = color.withOpacity(0.08 * pulseValue)
+        ..color = color.withValues(alpha: 0.08 * pulseValue)
         ..style = PaintingStyle.fill;
 
       canvas.drawRRect(
@@ -441,7 +441,7 @@ class _PremiumDetectionPainter extends CustomPainter {
 
     // Badge border
     final borderPaint = Paint()
-      ..color = Colors.white.withOpacity(0.3)
+      ..color = Colors.white.withValues(alpha: 0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 

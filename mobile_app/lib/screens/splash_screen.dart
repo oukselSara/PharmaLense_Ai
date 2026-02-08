@@ -105,16 +105,16 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF0A4D3C), // Deep emerald
-              const Color(0xFF14B57F), // Vibrant teal
-              const Color(0xFF0D7C5E), // Rich green
+              Color(0xFF0A4D3C), // Deep emerald
+              Color(0xFF14B57F), // Vibrant teal
+              Color(0xFF0D7C5E), // Rich green
             ],
-            stops: const [0.0, 0.5, 1.0],
+            stops: [0.0, 0.5, 1.0],
           ),
         ),
         child: Stack(
@@ -158,19 +158,19 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                                 colors: [
-                                  Colors.white.withOpacity(0.95),
-                                  Colors.white.withOpacity(0.85),
+                                  Colors.white.withValues(alpha: 0.95),
+                                  Colors.white.withValues(alpha: 0.85),
                                 ],
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.15),
+                                  color: Colors.black.withValues(alpha: 0.15),
                                   blurRadius: 30,
                                   offset: const Offset(0, 15),
                                   spreadRadius: 5,
                                 ),
                                 BoxShadow(
-                                  color: const Color(0xFF14B57F).withOpacity(0.3),
+                                  color: const Color(0xFF14B57F).withValues(alpha: 0.3),
                                   blurRadius: 40,
                                   offset: const Offset(0, 10),
                                   spreadRadius: -5,
@@ -189,7 +189,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                         end: Alignment.bottomRight,
                                         colors: [
                                           Colors.transparent,
-                                          Colors.white.withOpacity(0.3),
+                                          Colors.white.withValues(alpha: 0.3),
                                           Colors.transparent,
                                         ],
                                         stops: const [0.0, 0.5, 1.0],
@@ -203,10 +203,10 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                 ),
                                 
                                 // Medical cross icon
-                                Icon(
+                                const Icon(
                                   Icons.medical_services_rounded,
                                   size: 70,
-                                  color: const Color(0xFF0A4D3C),
+                                  color: Color(0xFF0A4D3C),
                                 ),
                               ],
                             ),
@@ -242,7 +242,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                           Text(
                             'AI-Powered Medicine Scanner',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.85),
+                              color: Colors.white.withValues(alpha: 0.85),
                               fontSize: 15,
                               fontWeight: FontWeight.w400,
                               letterSpacing: 0.8,
@@ -257,7 +257,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                             height: 40,
                             child: CircularProgressIndicator(
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white.withOpacity(0.9),
+                                Colors.white.withValues(alpha: 0.9),
                               ),
                               strokeWidth: 3,
                             ),
@@ -287,14 +287,14 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                           height: 8,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Colors.white.withOpacity(0.6),
+                            color: Colors.white.withValues(alpha: 0.6),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Text(
                           'Professional Grade Technology',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.6),
+                            color: Colors.white.withValues(alpha: 0.6),
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                             letterSpacing: 1.2,
@@ -306,7 +306,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                           height: 8,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Colors.white.withOpacity(0.6),
+                            color: Colors.white.withValues(alpha: 0.6),
                           ),
                         ),
                       ],
@@ -315,7 +315,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     Text(
                       'v1.0.0',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.4),
+                        color: Colors.white.withValues(alpha: 0.4),
                         fontSize: 11,
                         fontWeight: FontWeight.w400,
                         letterSpacing: 0.5,
@@ -350,7 +350,7 @@ class ParticlePainter extends CustomPainter {
       final y = size.height * offset;
       
       final opacity = (1.0 - offset) * 0.15;
-      paint.color = Colors.white.withOpacity(opacity);
+      paint.color = Colors.white.withValues(alpha: opacity);
       
       final radius = 2.0 + (i % 3);
       canvas.drawCircle(Offset(x, y), radius, paint);
