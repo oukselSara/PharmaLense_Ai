@@ -605,7 +605,6 @@ class _CameraScreenState extends State<CameraScreen>
                       isScanning: cameraService.isScanning,
                       labelDetected: cameraService.labelDetected,
                       statusMessage: cameraService.statusMessage,
-                      detectionBox: cameraService.currentDetection,
                     ),
 
                     // Control buttons

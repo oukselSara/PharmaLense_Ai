@@ -73,8 +73,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     _fadeController.forward();
     _scaleController.forward();
 
-    // Navigate after delay - ultra fast startup (500ms)
-    Timer(const Duration(milliseconds: 500), () {
+    // Navigate after delay - show custom splash for longer (3 seconds)
+    Timer(const Duration(milliseconds: 5000), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(

@@ -288,6 +288,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.2"
+  huawei_scan:
+    dependency: "direct main"
+    description:
+      name: huawei_scan
+      sha256: "71bc8ce2e90fa07c2d82829ce928ebe3e69b3326fb55d2e7a68f62d9efdef6dd"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.12.0+304"
   image:
     dependency: "direct main"
     description:

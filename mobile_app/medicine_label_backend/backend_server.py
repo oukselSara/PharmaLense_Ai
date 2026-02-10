@@ -356,7 +356,7 @@ def enhance_label_for_ocr(img: np.ndarray, box: Tuple[int, int, int, int]) -> np
     This is applied to the cropped label for better text recognition
     """
     x1, y1, x2, y2 = box
-    
+
     # Add padding around the box
     h, w = img.shape[:2]
     pad = 10
@@ -364,26 +364,26 @@ def enhance_label_for_ocr(img: np.ndarray, box: Tuple[int, int, int, int]) -> np
     y1 = max(0, y1 - pad)
     x2 = min(w, x2 + pad)
     y2 = min(h, y2 + pad)
-    
+
     # Crop the label region
     cropped = img[y1:y2, x1:x2]
-    
+
     # Convert to grayscale
     gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
-    
+
     # Quick denoising
     denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
-    
+
     # Apply CLAHE for better contrast (helps OCR)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     enhanced = clahe.apply(denoised)
-    
+
     # Sharpen for clearer text
     kernel = np.array([[0, -1, 0],
                        [-1, 5, -1],
                        [0, -1, 0]])
     enhanced = cv2.filter2D(enhanced, -1, kernel)
-    
+
     return enhanced
 
 

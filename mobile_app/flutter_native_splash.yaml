@@ -3,16 +3,15 @@
 
 flutter_native_splash:
   # Green color matching your logo
-  color: "#4CAF50"
+  color: "#73b38c"
   
   # Use smaller logo for better appearance
   image: assets/images/logo_small.png
   
   # Android 12+ settings
   android_12:
-    color: "#4CAF50"
+    color: "#73b38c"
     image: assets/images/logo_small.png
-    icon_background_color: "#4CAF50"
   
   # Platform settings
   android: true

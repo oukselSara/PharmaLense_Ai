@@ -25,28 +25,28 @@ class OcrService {
     try {
       final imageBytes = await imageFile.readAsBytes();
       final image = img.decodeImage(imageBytes);
-      
+
       if (image == null) return null;
 
       // Try only 2 methods to avoid freezing
       final tempDir = Directory.systemTemp;
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      
+
       final results = <_OcrResult>[];
 
       // Method 1: Original with light enhancement
       final enhanced = _lightEnhance(image);
       final enhancedFile = File('${tempDir.path}/enhanced_$timestamp.jpg');
       await enhancedFile.writeAsBytes(img.encodeJpg(enhanced, quality: 90));
-      
+
       final result1 = await _performOcr(enhancedFile.path);
       if (result1 != null) results.add(result1);
-      
+
       // Method 2: High contrast
       final contrasted = _highContrast(image);
       final contrastFile = File('${tempDir.path}/contrast_$timestamp.jpg');
       await contrastFile.writeAsBytes(img.encodeJpg(contrasted, quality: 90));
-      
+
       final result2 = await _performOcr(contrastFile.path);
       if (result2 != null) results.add(result2);
 
@@ -97,7 +97,7 @@ class OcrService {
       // Save temporary file - only ONE preprocessing method
       final tempDir = Directory.systemTemp;
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      
+
       // Use only light enhancement to avoid freezing
       final enhanced = _lightEnhance(image);
       final tempFile = File('${tempDir.path}/frame_$timestamp.jpg');
@@ -138,7 +138,7 @@ class OcrService {
     try {
       final inputImage = InputImage.fromFilePath(filePath);
       final recognizedText = await _textRecognizer.processImage(inputImage);
-      
+
       final text = _extractTextFromBlocks(recognizedText);
       final confidence = _calculateConfidence(recognizedText);
 
@@ -163,7 +163,7 @@ class OcrService {
       }
 
       final text = block.text.trim();
-      
+
       // Skip empty or very short texts
       if (text.isEmpty || text.length < 2) continue;
 
@@ -186,15 +186,15 @@ class OcrService {
   String _cleanText(String text) {
     // Remove multiple spaces
     text = text.replaceAll(RegExp(r'\s+'), ' ');
-    
+
     // Remove leading/trailing spaces
     text = text.trim();
-    
+
     // Fix common OCR errors
     text = text.replaceAll(RegExp(r'[|l]{2,}'), 'II');
     text = text.replaceAll(RegExp(r'[oO](?=\d)'), '0');
     text = text.replaceAll(RegExp(r'(?<=\d)[oO]'), '0');
-    
+
     return text;
   }
 
@@ -243,7 +243,7 @@ class OcrService {
 
       for (int y = centerY - sampleSize; y < centerY + sampleSize; y++) {
         if (y < 0 || y >= image.height) continue;
-        
+
         for (int x = centerX - sampleSize; x < centerX + sampleSize; x++) {
           if (x < 0 || x >= image.width) continue;
 
@@ -273,7 +273,7 @@ class OcrService {
     final max = [r, g, b].reduce((a, b) => a > b ? a : b);
     final min = [r, g, b].reduce((a, b) => a < b ? a : b);
     final diff = max - min;
-    
+
     final saturation = max == 0 ? 0 : (diff / max) * 100;
     final brightness = max;
 
@@ -372,17 +372,17 @@ class OcrService {
       // Quick sampling with larger steps for speed
       for (int y = centerY - sampleSize; y < centerY + sampleSize; y += 5) {
         if (y < 0 || y >= image.height) continue;
-        
+
         for (int x = centerX - sampleSize; x < centerX + sampleSize; x += 5) {
           if (x < 0 || x >= image.width) continue;
 
           final pixel = image.getPixel(x, y);
           final brightness = (pixel.r.toInt() + pixel.g.toInt() + pixel.b.toInt()) / 3;
-          
+
           if (brightness < 120) {
             darkPixels++;
           }
-          
+
           totalSamples++;
         }
       }

@@ -27,7 +27,12 @@
       "Bash(curl:*)",
       "Bash(ls:*)",
       "Bash(.venvScriptspython.exe -c \"from PIL import Image; print\\(''PIL available''\\)\")",
-      "Bash(.venv/Scripts/python.exe:*)"
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(dart run:*)",
+      "WebSearch",
+      "WebFetch(domain:pub.dev)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }

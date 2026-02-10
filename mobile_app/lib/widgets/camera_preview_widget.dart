@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'dart:math' as math;
-import '../services/label_detection_service.dart';
 
-/// Premium camera preview widget with luxury design
+/// Premium camera preview widget with a simple scan area
 class PremiumCameraPreviewWidget extends StatelessWidget {
   final CameraController cameraController;
   final bool isScanning;
   final bool labelDetected;
   final String statusMessage;
-  final DetectionResult? detectionBox;
 
   const PremiumCameraPreviewWidget({
     super.key,
@@ -17,7 +14,6 @@ class PremiumCameraPreviewWidget extends StatelessWidget {
     required this.isScanning,
     required this.labelDetected,
     required this.statusMessage,
-    this.detectionBox,
   });
 
   @override
@@ -40,20 +36,14 @@ class PremiumCameraPreviewWidget extends StatelessWidget {
         // Camera preview
         _buildCameraPreview(context),
 
-        // Detection overlay
-        if (detectionBox != null)
-          _PremiumDetectionOverlay(
-            detectionBox: detectionBox!,
-            labelDetected: labelDetected,
-            cameraController: cameraController,
-          ),
+        // Fixed scan area overlay
+        _ScanAreaOverlay(
+          isScanning: isScanning,
+          labelDetected: labelDetected,
+        ),
 
         // Status overlay
         _buildStatusOverlay(context),
-
-        // Scanning guide
-        if (!labelDetected && isScanning)
-          _buildScanningGuide(context),
       ],
     );
   }
@@ -144,94 +134,39 @@ class PremiumCameraPreviewWidget extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildScanningGuide(BuildContext context) {
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 140,
-      child: Column(
-        children: [
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 40),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.1),
-                width: 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF14B57F).withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.center_focus_strong_rounded,
-                    color: Color(0xFF14B57F),
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Text(
-                    'Point at medicine label',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
-/// Premium detection overlay with animations
-class _PremiumDetectionOverlay extends StatefulWidget {
-  final DetectionResult detectionBox;
+/// Fixed scan area overlay with animated corners
+class _ScanAreaOverlay extends StatefulWidget {
+  final bool isScanning;
   final bool labelDetected;
-  final CameraController cameraController;
 
-  const _PremiumDetectionOverlay({
-    required this.detectionBox,
+  const _ScanAreaOverlay({
+    required this.isScanning,
     required this.labelDetected,
-    required this.cameraController,
   });
 
   @override
-  State<_PremiumDetectionOverlay> createState() =>
-      _PremiumDetectionOverlayState();
+  State<_ScanAreaOverlay> createState() => _ScanAreaOverlayState();
 }
 
-class _PremiumDetectionOverlayState extends State<_PremiumDetectionOverlay>
+class _ScanAreaOverlayState extends State<_ScanAreaOverlay>
     with SingleTickerProviderStateMixin {
-  late AnimationController _pulseController;
+  late AnimationController _animationController;
   late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
 
-    _pulseController = AnimationController(
+    _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
 
-    _pulseAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
+    _pulseAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(
-        parent: _pulseController,
+        parent: _animationController,
         curve: Curves.easeInOut,
       ),
     );
@@ -239,181 +174,188 @@ class _PremiumDetectionOverlayState extends State<_PremiumDetectionOverlay>
 
   @override
   void dispose() {
-    _pulseController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _pulseController,
+      animation: _animationController,
       builder: (context, child) {
         return CustomPaint(
-          painter: _PremiumDetectionPainter(
-            detectionBox: widget.detectionBox,
+          painter: _ScanAreaPainter(
+            isScanning: widget.isScanning,
             labelDetected: widget.labelDetected,
             pulseValue: _pulseAnimation.value,
-            cameraController: widget.cameraController,
           ),
+          size: Size.infinite,
         );
       },
     );
   }
 }
 
-/// Custom painter for premium detection box
-class _PremiumDetectionPainter extends CustomPainter {
-  final DetectionResult detectionBox;
+/// Custom painter for the scan area
+class _ScanAreaPainter extends CustomPainter {
+  final bool isScanning;
   final bool labelDetected;
   final double pulseValue;
-  final CameraController cameraController;
 
-  _PremiumDetectionPainter({
-    required this.detectionBox,
+  _ScanAreaPainter({
+    required this.isScanning,
     required this.labelDetected,
     required this.pulseValue,
-    required this.cameraController,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final box = detectionBox.box;
+    // Calculate scan area - centered square
+    final double scanSize = size.width * 0.75;
+    final double left = (size.width - scanSize) / 2;
+    final double top = (size.height - scanSize) / 2 - 40; // Slightly above center
+    final Rect scanRect = Rect.fromLTWH(left, top, scanSize, scanSize);
 
-    // CRITICAL FIX: Use actual camera image dimensions from detection result
-    // These are the dimensions of the image that was sent to the backend
-    final double capturedImageWidth = detectionBox.imageWidth.toDouble();
-    final double capturedImageHeight = detectionBox.imageHeight.toDouble();
+    // Draw darkened overlay outside scan area
+    _drawDarkOverlay(canvas, size, scanRect);
 
-    // Get screen preview dimensions
-    final double screenWidth = size.width;
-    final double screenHeight = size.height;
+    // Draw scan frame
+    _drawScanFrame(canvas, scanRect);
 
-    // Calculate how the image is scaled to fit the screen (cover mode)
-    // The preview uses BoxFit.cover, so we scale to fill and crop
-    final double scaleX = screenWidth / capturedImageWidth;
-    final double scaleY = screenHeight / capturedImageHeight;
-    final double scale = math.max(scaleX, scaleY);  // Use max for cover mode
+    // Draw corner brackets
+    _drawCornerBrackets(canvas, scanRect);
 
-    // Calculate the scaled image size and centering offset
-    final double scaledImageWidth = capturedImageWidth * scale;
-    final double scaledImageHeight = capturedImageHeight * scale;
-
-    // The image might extend beyond screen bounds, calculate the visible portion offset
-    final double offsetX = (screenWidth - scaledImageWidth) / 2;
-    final double offsetY = (screenHeight - scaledImageHeight) / 2;
-
-    // Transform bounding box coordinates from image space to screen space
-    final double screenX1 = (box.x1 * scale) + offsetX;
-    final double screenY1 = (box.y1 * scale) + offsetY;
-    final double screenX2 = (box.x2 * scale) + offsetX;
-    final double screenY2 = (box.y2 * scale) + offsetY;
-
-    final screenRect = Rect.fromLTRB(screenX1, screenY1, screenX2, screenY2);
-
-    // Clamp to visible screen bounds (in case box extends beyond)
-    final clampedRect = Rect.fromLTRB(
-      screenRect.left.clamp(0.0, screenWidth),
-      screenRect.top.clamp(0.0, screenHeight),
-      screenRect.right.clamp(0.0, screenWidth),
-      screenRect.bottom.clamp(0.0, screenHeight),
-    );
-
-    // Draw detection box with premium style
-    _drawPremiumBox(canvas, clampedRect);
-
-    if (labelDetected) {
-      _drawConfidenceBadge(canvas, clampedRect);
-      _drawSuccessIndicator(canvas, clampedRect);
-    }
+    // Draw instruction text
+    _drawInstructionText(canvas, scanRect);
   }
 
-  void _drawPremiumBox(Canvas canvas, Rect rect) {
-    final color = labelDetected ? const Color(0xFF14B57F) : const Color(0xFFFF9800);
-    
+  void _drawDarkOverlay(Canvas canvas, Size size, Rect scanRect) {
+    final overlayPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.5)
+      ..style = PaintingStyle.fill;
+
+    // Create a path that covers the entire screen except the scan area
+    final path = Path()
+      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..addRRect(RRect.fromRectAndRadius(scanRect, const Radius.circular(16)))
+      ..fillType = PathFillType.evenOdd;
+
+    canvas.drawPath(path, overlayPaint);
+  }
+
+  void _drawScanFrame(Canvas canvas, Rect scanRect) {
+    final color = labelDetected
+        ? const Color(0xFF14B57F)
+        : const Color(0xFF14B57F).withValues(alpha: pulseValue);
+
     // Outer glow
     final glowPaint = Paint()
-      ..color = color.withValues(alpha: 0.15 * pulseValue)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
-    
+      ..color = color.withValues(alpha: 0.2 * pulseValue)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+
     canvas.drawRRect(
-      RRect.fromRectAndRadius(rect.inflate(10), const Radius.circular(16)),
+      RRect.fromRectAndRadius(scanRect.inflate(5), const Radius.circular(20)),
       glowPaint,
     );
 
-    // Main border with gradient
-    final gradientPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          color.withValues(alpha: pulseValue),
-          color.withValues(alpha: pulseValue * 0.8),
-        ],
-      ).createShader(rect)
+    // Main border
+    final borderPaint = Paint()
+      ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
+      ..strokeWidth = 2;
 
     canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(12)),
-      gradientPaint,
+      RRect.fromRectAndRadius(scanRect, const Radius.circular(16)),
+      borderPaint,
     );
 
-    // Corner accents
-    final cornerPaint = Paint()
-      ..color = Colors.white.withValues(alpha: pulseValue * 0.9)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
-
-    final cornerLength = 30.0 * pulseValue;
-
-    // Draw all four corners
-    final corners = [
-      (rect.topLeft, [0.0, cornerLength], [cornerLength, 0.0]),
-      (rect.topRight, [0.0, cornerLength], [-cornerLength, 0.0]),
-      (rect.bottomLeft, [0.0, -cornerLength], [cornerLength, 0.0]),
-      (rect.bottomRight, [0.0, -cornerLength], [-cornerLength, 0.0]),
-    ];
-
-    for (final corner in corners) {
-      final point = corner.$1;
-      final vertical = corner.$2;
-      final horizontal = corner.$3;
-
-      canvas.drawLine(
-        point,
-        Offset(point.dx + horizontal[0], point.dy + horizontal[1]),
-        cornerPaint,
-      );
-      canvas.drawLine(
-        point,
-        Offset(point.dx + vertical[0], point.dy + vertical[1]),
-        cornerPaint,
-      );
-    }
-
-    // Inner fill
+    // Inner fill when detected
     if (labelDetected) {
       final fillPaint = Paint()
-        ..color = color.withValues(alpha: 0.08 * pulseValue)
+        ..color = color.withValues(alpha: 0.1)
         ..style = PaintingStyle.fill;
 
       canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(12)),
+        RRect.fromRectAndRadius(scanRect, const Radius.circular(16)),
         fillPaint,
       );
     }
   }
 
-  void _drawConfidenceBadge(Canvas canvas, Rect rect) {
+  void _drawCornerBrackets(Canvas canvas, Rect scanRect) {
+    final color = labelDetected
+        ? const Color(0xFF14B57F)
+        : Colors.white.withValues(alpha: pulseValue);
+
+    final cornerPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+
+    const cornerLength = 35.0;
+    const cornerOffset = 8.0;
+
+    // Top-left corner
+    canvas.drawLine(
+      Offset(scanRect.left - cornerOffset, scanRect.top + cornerLength),
+      Offset(scanRect.left - cornerOffset, scanRect.top - cornerOffset),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(scanRect.left - cornerOffset, scanRect.top - cornerOffset),
+      Offset(scanRect.left + cornerLength, scanRect.top - cornerOffset),
+      cornerPaint,
+    );
+
+    // Top-right corner
+    canvas.drawLine(
+      Offset(scanRect.right - cornerLength, scanRect.top - cornerOffset),
+      Offset(scanRect.right + cornerOffset, scanRect.top - cornerOffset),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(scanRect.right + cornerOffset, scanRect.top - cornerOffset),
+      Offset(scanRect.right + cornerOffset, scanRect.top + cornerLength),
+      cornerPaint,
+    );
+
+    // Bottom-left corner
+    canvas.drawLine(
+      Offset(scanRect.left - cornerOffset, scanRect.bottom - cornerLength),
+      Offset(scanRect.left - cornerOffset, scanRect.bottom + cornerOffset),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(scanRect.left - cornerOffset, scanRect.bottom + cornerOffset),
+      Offset(scanRect.left + cornerLength, scanRect.bottom + cornerOffset),
+      cornerPaint,
+    );
+
+    // Bottom-right corner
+    canvas.drawLine(
+      Offset(scanRect.right - cornerLength, scanRect.bottom + cornerOffset),
+      Offset(scanRect.right + cornerOffset, scanRect.bottom + cornerOffset),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(scanRect.right + cornerOffset, scanRect.bottom + cornerOffset),
+      Offset(scanRect.right + cornerOffset, scanRect.bottom - cornerLength),
+      cornerPaint,
+    );
+  }
+
+  void _drawInstructionText(Canvas canvas, Rect scanRect) {
+    if (labelDetected) return;
+
     final textPainter = TextPainter(
-      text: TextSpan(
-        text: '${(detectionBox.confidence * 100).toStringAsFixed(0)}%',
-        style: const TextStyle(
+      text: const TextSpan(
+        text: 'Place medicine label here',
+        style: TextStyle(
           color: Colors.white,
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.5,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.3,
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -421,81 +363,18 @@ class _PremiumDetectionPainter extends CustomPainter {
 
     textPainter.layout();
 
-    final badgeRect = Rect.fromLTWH(
-      rect.left,
-      rect.top - 34,
-      textPainter.width + 18,
-      26,
+    final textOffset = Offset(
+      scanRect.center.dx - textPainter.width / 2,
+      scanRect.bottom + 30,
     );
 
-    // Badge background
-    final badgePaint = Paint()
-      ..shader = const LinearGradient(
-        colors: [
-          Color(0xFF14B57F),
-          Color(0xFF0F9A6A),
-        ],
-      ).createShader(badgeRect)
-      ..style = PaintingStyle.fill;
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(badgeRect, const Radius.circular(13)),
-      badgePaint,
-    );
-
-    // Badge border
-    final borderPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(badgeRect, const Radius.circular(13)),
-      borderPaint,
-    );
-
-    // Text
-    textPainter.paint(
-      canvas,
-      Offset(rect.left + 9, rect.top - 31),
-    );
-  }
-
-  void _drawSuccessIndicator(Canvas canvas, Rect rect) {
-    // Success checkmark circle
-    final indicatorCenter = Offset(rect.right - 20, rect.top + 20);
-    
-    final circlePaint = Paint()
-      ..color = const Color(0xFF14B57F)
-      ..style = PaintingStyle.fill;
-
-    canvas.drawCircle(indicatorCenter, 16 * pulseValue, circlePaint);
-
-    final borderPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-
-    canvas.drawCircle(indicatorCenter, 16 * pulseValue, borderPaint);
-
-    // Checkmark
-    final checkPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
-
-    final checkPath = Path();
-    checkPath.moveTo(indicatorCenter.dx - 6, indicatorCenter.dy);
-    checkPath.lineTo(indicatorCenter.dx - 2, indicatorCenter.dy + 4);
-    checkPath.lineTo(indicatorCenter.dx + 6, indicatorCenter.dy - 4);
-
-    canvas.drawPath(checkPath, checkPaint);
+    textPainter.paint(canvas, textOffset);
   }
 
   @override
-  bool shouldRepaint(_PremiumDetectionPainter oldDelegate) {
+  bool shouldRepaint(_ScanAreaPainter oldDelegate) {
     return oldDelegate.pulseValue != pulseValue ||
-        oldDelegate.labelDetected != labelDetected;
+        oldDelegate.labelDetected != labelDetected ||
+        oldDelegate.isScanning != isScanning;
   }
 }

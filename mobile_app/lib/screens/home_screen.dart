@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'camera_screen.dart';
 import 'invoice_scan_screen.dart';
+import 'barcode_scanner_screen.dart';
 
 /// Premium home screen with luxury design
 class HomeScreen extends StatefulWidget {
@@ -301,6 +302,63 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   PageRouteBuilder(
                     pageBuilder: (context, animation, secondaryAnimation) =>
                         const InvoiceScanScreen(),
+                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.95, end: 1.0).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            ),
+                          ),
+                          child: child,
+                        ),
+                      );
+                    },
+                    transitionDuration: const Duration(milliseconds: 400),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Barcode Scanner - Third action
+        SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.3),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: _cardAnimation,
+            curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
+          )),
+          child: FadeTransition(
+            opacity: CurvedAnimation(
+              parent: _cardAnimation,
+              curve: const Interval(0.3, 1.0),
+            ),
+            child: _PremiumScanCard(
+              icon: Icons.qr_code_scanner_rounded,
+              title: 'Scan Barcode',
+              subtitle: 'Scan barcodes & QR codes instantly',
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white,
+                  Color(0xFFF8FDFB),
+                ],
+              ),
+              isPrimary: false,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        const BarcodeScannerScreen(),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       return FadeTransition(
                         opacity: animation,

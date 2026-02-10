@@ -29,6 +29,9 @@ dependencies:
   # UI
   cupertino_icons: ^1.0.6
 
+  # Barcode Scanner - Huawei HMS Scan Kit
+  huawei_scan: ^2.12.0+304
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -52,13 +55,13 @@ flutter_launcher_icons:
   android: true
   ios: true
 
-  image_path: assets/images/logo.png
+  image_path: assets/icon/logo_small.png
 
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: assets/images/logo.png
+  adaptive_icon_foreground: assets/icon/logo_small.png
 
   web:
     generate: true
-    image_path: assets/images/logo.png
+    image_path: assets/icon/logo_small.png
     background_color: "#FFFFFF"
     theme_color: "#14B57F"
