@@ -177,8 +177,8 @@ class CameraService extends ChangeNotifier {
         // Use YOLO backend for detection
         final detection = await _yoloService.detectLive(image);
 
-        if (detection != null) {
-          // Label detected!
+        if (detection != null && detection.confidence >= 0.9) {
+          // Label detected with high confidence (90%+)!
           _currentDetection = detection;
           _labelDetected = true;
           _updateStatus('✅ Label found! Hold steady...');
@@ -189,6 +189,12 @@ class CameraService extends ChangeNotifier {
 
           // Now perform OCR on the detected region
           await _performOcrOnDetection(image, onLabelDetected);
+        } else if (detection != null && detection.confidence < 0.9) {
+          // Detection found but confidence too low
+          _currentDetection = detection;
+          _labelDetected = false;
+          _updateStatus('🔍 Low confidence (${(detection.confidence * 100).toInt()}%) - hold steady...');
+          notifyListeners();
         } else {
           // No detection - keep scanning
           _currentDetection = null;

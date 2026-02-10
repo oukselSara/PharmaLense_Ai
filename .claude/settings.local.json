@@ -25,7 +25,9 @@
       "Bash(flutter pub upgrade:*)",
       "Bash(test:*)",
       "Bash(curl:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(.venvScriptspython.exe -c \"from PIL import Image; print\\(''PIL available''\\)\")",
+      "Bash(.venv/Scripts/python.exe:*)"
     ]
   }
 }
