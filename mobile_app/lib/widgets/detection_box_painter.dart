@@ -14,7 +14,7 @@ class DetectionBoxPainter extends CustomPainter {
     if (box == null) return;
 
     final paint = Paint()
-      ..color = Colors.green
+      ..color = const Color.fromARGB(255, 253, 253, 253)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
 
@@ -27,27 +27,18 @@ class DetectionBoxPainter extends CustomPainter {
     final originalRight = box![2] * scaleX;
     final originalBottom = box![3] * scaleY;
 
-    // Calculate center of detected region
+    // Calculate center and dimensions
     final centerX = (originalLeft + originalRight) / 2;
     final centerY = (originalTop + originalBottom) / 2;
-
-    // Real label dimensions: 2cm width x 4cm height (ratio 1:2)
-    // Use a fixed aspect ratio matching the real label
-    const labelWidthCm = 2.0;
-    const labelHeightCm = 4.0;
-    const aspectRatio = labelWidthCm / labelHeightCm; // 0.5
-
-    // Base the box size on the detected region, scaled down
     final originalWidth = originalRight - originalLeft;
     final originalHeight = originalBottom - originalTop;
-    final scaleFactor = 0.55;
 
-    // Calculate new dimensions maintaining the 2:4 aspect ratio
-    final baseSize = (originalWidth + originalHeight) / 2 * scaleFactor;
-    final newWidth = baseSize * aspectRatio;  // narrower (2cm)
-    final newHeight = baseSize;                // taller (4cm)
+    // Swap width and height, then scale down to 55%
+    const scaleFactor = 0.55;
+    final newWidth = originalHeight * scaleFactor;
+    final newHeight = originalWidth * scaleFactor;
 
-    // Create new rect with fixed aspect ratio centered at detected position
+    // Create new rect with swapped dimensions centered at same point
     final rect = Rect.fromCenter(
       center: Offset(centerX, centerY),
       width: newWidth,
